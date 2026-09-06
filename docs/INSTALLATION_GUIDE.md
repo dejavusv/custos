@@ -164,6 +164,7 @@ docker compose -f docker-compose.prod.yml ps
 - `V2__init_vault_schema.sql`: ตาราง Credential Profiles และ AES-GCM Encrypted Vault
 - `V3__init_backup_schema.sql`: ตาราง Task Backup และ Retention History
 - `V4__init_pipeline_schema.sql`: ตาราง Pipeline DAG Nodes และ Quartz Scheduler Cluster Tables
+- `V5__add_missing_pipeline_audit_columns.sql`: คอลัมน์ Audit (updated_at, created_by) สำหรับตารางในโมดูล Pipeline
 
 หากต้องการตรวจสอบประวัติ Migration ใน Database:
 ```sql
