@@ -1,4 +1,4 @@
-version: '3.8'
+name: custos
 
 services:
   postgres:
@@ -80,7 +80,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-3011}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - custos-network
     healthcheck:
