@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: custos-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-custos_db}
+      POSTGRES_USER: ${POSTGRES_USER:-custos_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-custos_production_password}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - custos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-custos_user} -d ${POSTGRES_DB:-custos_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: custos-redis-prod
+    restart: always
+    volumes:
+      - redis_prod_data:/data
+    networks:
+      - custos-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: custos-backend-prod
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-custos_db}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-custos_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-custos_production_password}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      CUSTOS_JWT_SECRET: ${CUSTOS_JWT_SECRET}
+      CUSTOS_VAULT_MASTER_KEY: ${CUSTOS_VAULT_MASTER_KEY}
+      CUSTOS_AWS_SES_ENABLED: ${CUSTOS_AWS_SES_ENABLED:-false}
+      CUSTOS_AWS_SES_FROM_EMAIL: ${CUSTOS_AWS_SES_FROM_EMAIL:-noreply@custos.io}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - staging_prod_data:/var/custos/staging
+    networks:
+      - custos-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: custos-frontend-prod
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - custos-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  custos-network:
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
+    driver: local
+  redis_prod_data:
+    driver: local
+  staging_prod_data:
+    driver: local

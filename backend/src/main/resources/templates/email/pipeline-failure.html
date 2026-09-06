@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Pipeline Failure Alert - Custos</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+        .container { max-width: 650px; margin: 0 auto; background-color: #1e293b; border: 1px solid #7f1d1d; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .header { background: linear-gradient(135deg, #991b1b 0%, #b91c1c 100%); padding: 24px; text-align: center; }
+        .header h1 { margin: 0; color: #ffffff; font-size: 20px; font-weight: 700; }
+        .content { padding: 28px 24px; }
+        .alert-badge { display: inline-block; background-color: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 16px; }
+        .error-box { background-color: #0f172a; border-left: 4px solid #ef4444; padding: 14px; margin: 16px 0; border-radius: 4px; font-size: 13px; color: #fca5a5; font-family: monospace; word-break: break-all; }
+        .log-section { margin-top: 20px; }
+        .log-title { font-size: 12px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-bottom: 8px; }
+        .log-container { background-color: #090d16; border: 1px solid #334155; border-radius: 8px; padding: 14px; max-height: 300px; overflow-y: auto; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 11px; line-height: 1.5; color: #cbd5e1; white-space: pre-wrap; }
+        .footer { background-color: #0f172a; padding: 16px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px solid #334155; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>&#9888; Custos Critical Alert: Pipeline Failed</h1>
+        </div>
+        <div class="content">
+            <div style="text-align: center;">
+                <div class="alert-badge">Execution Interrupted</div>
+                <h2 style="margin: 0 0 8px 0; color: #ffffff; font-size: 18px;" th:text="${pipelineName}">Daily Backup Pipeline</h2>
+                <p style="margin: 0; font-size: 13px; color: #94a3b8;">
+                    Failed Step: <strong style="color: #f87171;" th:text="${failedStepName}">PostgreSQL Dump Step</strong>
+                    <span th:if="${exitCode != null}"> (Exit Code: <span th:text="${exitCode}">1</span>)</span>
+                </p>
+            </div>
+
+            <div class="error-box">
+                <strong>Error Details:</strong>
+                <div style="margin-top: 4px;" th:text="${errorMessage}">Process exited with non-zero code or connection timed out.</div>
+            </div>
+
+            <div class="log-section">
+                <div class="log-title">Last 50 Lines of Execution Log</div>
+                <div class="log-container" th:text="${last50LinesLog}">
+[2026-09-06 12:00:00 INFO] Starting database dump process...
+[2026-09-06 12:00:02 ERROR] Network socket closed unexpectedly.
+                </div>
+            </div>
+        </div>
+        <div class="footer">
+            Sent by Custos Platform &bull; AWS SES Notification Engine &bull; Urgent Operator Alert
+        </div>
+    </div>
+</body>
+</html>

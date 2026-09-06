@@ -1,0 +1,66 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: custos-backend
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/custos_db}
+    username: ${SPRING_DATASOURCE_USERNAME:custos_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:custos_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 30000
+      connection-timeout: 20000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      initialize-schema: never
+
+custos:
+  jwt:
+    # 512-bit Base64 / Hex secret key
+    secret: ${CUSTOS_JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970337336763979244226452948404D6351}
+    access-token-expiration-ms: 900000 # 15 นาที
+    refresh-token-expiration-ms: 604800000 # 7 วัน
+  auth:
+    max-failed-attempts: 5
+    lockout-duration-minutes: 15
+  vault:
+    master-key: ${CUSTOS_VAULT_MASTER_KEY:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    com.custos: DEBUG
+    org.springframework.security: INFO

@@ -1,0 +1,157 @@
+# ==============================================================================
+# Custos Platform - Global .gitignore
+# Enterprise Server Automation & Task Scheduling Platform
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment & Sensitive Credentials (Zero-Secret Leakage)
+# ------------------------------------------------------------------------------
+# ป้องกันการเผลอ Commit ไฟล์ Secret Key, Password, หรือ Vault Master Key
+.env
+.env.*
+!.env.example
+!.env.*.example
+docker/.env
+docker/.env.prod
+docker/.env.dev
+!docker/.env.prod.example
+!docker/.env.dev.example
+
+# Private Keys, Certificates, and Keystores
+*.pem
+*.key
+*.pkcs12
+*.p12
+*.jks
+*.keystore
+id_rsa
+id_ed25519
+known_hosts
+
+# ------------------------------------------------------------------------------
+# 2. Backend (Java 21 / Spring Boot 3.3 / Maven)
+# ------------------------------------------------------------------------------
+backend/target/
+target/
+*.class
+
+# Maven wrapper cache & timing
+.mvn/timing.properties
+backend/.mvn/timing.properties
+
+# Application logs
+logs/
+*.log
+backend/logs/
+spring.log
+
+# Temporary Backup Dumps, Chunks & Storage Data
+temp/
+tmp/
+storage/
+backups/
+backend/temp/
+backend/storage/
+backend/backups/
+*.part*
+*.dump
+*.sql.gz
+*.sql.zst
+
+# Embedded / Test databases
+*.mv.db
+*.trace.db
+
+# ------------------------------------------------------------------------------
+# 3. Frontend (Node 20 / Vite / React / TypeScript)
+# ------------------------------------------------------------------------------
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+dist-ssr/
+frontend/build/
+build/
+
+# Frontend local env & caches
+frontend/.env.local
+frontend/.env.*.local
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+frontend/.tsbuildinfo
+
+# Package manager debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------------------
+# 4. Docker & Local Infrastructure Data Volumes
+# ------------------------------------------------------------------------------
+docker/postgres_data/
+docker/redis_data/
+docker/storage_data/
+postgres_data/
+redis_data/
+
+# ------------------------------------------------------------------------------
+# 5. IDE & Editor Configurations
+# ------------------------------------------------------------------------------
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Visual Studio Code (เว้น settings และ extensions ที่จำเป็นไว้)
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# Eclipse
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+
+# Vim / Sublime Text / Swap files
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# 6. Operating System Artifacts
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+.directory

@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: custos-backend-test
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+  quartz:
+    job-store-type: memory
+
+custos:
+  jwt:
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970337336763979244226452948404D6351
+    access-token-expiration-ms: 60000
+    refresh-token-expiration-ms: 120000
+  auth:
+    max-failed-attempts: 5
+    lockout-duration-minutes: 15
+  vault:
+    master-key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

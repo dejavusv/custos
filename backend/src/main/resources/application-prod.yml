@@ -1,0 +1,34 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: custos-backend
+
+logging:
+  level:
+    root: INFO
+    com.custos: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.quartz: INFO
