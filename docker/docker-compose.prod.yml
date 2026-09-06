@@ -39,6 +39,8 @@ services:
       dockerfile: Dockerfile
     container_name: custos-backend-prod
     restart: always
+    ports:
+      - "${BACKEND_PORT:-8011}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,7 +78,7 @@ services:
     container_name: custos-frontend-prod
     restart: always
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-3011}:80"
     depends_on:
       - backend
     networks:

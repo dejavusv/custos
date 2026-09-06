@@ -23,7 +23,7 @@ Custos ถูกออกแบบให้ทำงานเป็นอิส�
 ```
 [ Web Browser ]
       │
-      ▼ (Port 80 / 443)
+      ▼ (Port 3011 / 443)
 ┌────────────────────────────────────────────────────────┐
 │ custos-frontend (Nginx Alpine Reverse Proxy + React)   │
 │  - SPA Static Asset Caching                            │
@@ -123,6 +123,9 @@ nano .env.prod
 
 2. **กรอกค่าความลับที่สร้างไว้ใน `.env.prod`:**
 ```ini
+FRONTEND_PORT=3011
+BACKEND_PORT=8011
+
 POSTGRES_DB=custos_db
 POSTGRES_USER=custos_prod_user
 POSTGRES_PASSWORD=UltraSecureDatabasePassword2026!
@@ -175,7 +178,7 @@ Custos เปิดใช้งาน **Spring Boot Actuator** เพื่อ�
 
 ### Health Probe Endpoint
 ```bash
-curl http://localhost:8080/actuator/health
+curl http://localhost:8011/actuator/health
 ```
 *ตัวอย่างคำตอบ:*
 ```json
