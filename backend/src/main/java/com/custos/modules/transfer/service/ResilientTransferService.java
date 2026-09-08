@@ -222,8 +222,28 @@ public class ResilientTransferService {
             String privateKey = secret != null ? secret.getSshPrivateKey() : null;
             String passphrase = secret != null ? secret.getSshPassphrase() : null;
 
-            if (vault.getCredentialType() == CredentialType.FTP) {
-                return new FtpTransferClient(vault.getHost(), vault.getPort(), vault.getUsername(), password, false);
+            if (vault.getCredentialType() == CredentialType.FTP || vault.getCredentialType() == CredentialType.FTPS) {
+                boolean isFtps = vault.getCredentialType() == CredentialType.FTPS;
+                boolean trustSelfSigned = true;
+
+                if (vault.getExtraMetadata() != null && !vault.getExtraMetadata().isBlank()) {
+                    try {
+                        var node = objectMapper.readTree(vault.getExtraMetadata());
+                        if (node.has("ftpEncryption")) {
+                            String enc = node.get("ftpEncryption").asText();
+                            isFtps = "EXPLICIT_TLS".equalsIgnoreCase(enc) || "FTPS".equalsIgnoreCase(enc);
+                        } else if (node.has("isFtps")) {
+                            isFtps = node.get("isFtps").asBoolean();
+                        }
+                        if (node.has("trustSelfSigned")) {
+                            trustSelfSigned = node.get("trustSelfSigned").asBoolean();
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not parse extraMetadata for FTP credential {}: {}", vault.getName(), e.getMessage());
+                    }
+                }
+
+                return new FtpTransferClient(vault.getHost(), vault.getPort(), vault.getUsername(), password, isFtps, trustSelfSigned);
             } else {
                 // SFTP
                 return new SftpTransferClient(vault.getHost(), vault.getPort(), vault.getUsername(), password, privateKey, passphrase);
@@ -231,8 +251,11 @@ public class ResilientTransferService {
         }
 
         // Direct parameters fallback
-        if ("FTP".equalsIgnoreCase(request.getProtocol())) {
-            return new FtpTransferClient(request.getHost(), request.getPort(), request.getUsername(), request.getPassword(), false);
+        if ("FTP".equalsIgnoreCase(request.getProtocol()) || "FTPS".equalsIgnoreCase(request.getProtocol())) {
+            boolean isFtps = "FTPS".equalsIgnoreCase(request.getProtocol())
+                    || Boolean.TRUE.equals(request.getIsFtps())
+                    || "EXPLICIT_TLS".equalsIgnoreCase(request.getFtpEncryption());
+            return new FtpTransferClient(request.getHost(), request.getPort(), request.getUsername(), request.getPassword(), isFtps, true);
         } else {
             return new SftpTransferClient(request.getHost(), request.getPort(), request.getUsername(), request.getPassword(), request.getSshPrivateKey(), request.getSshPassphrase());
         }

@@ -6,6 +6,7 @@ import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPFile;
 import org.apache.commons.net.ftp.FTPReply;
 import org.apache.commons.net.ftp.FTPSClient;
+import org.apache.commons.net.util.TrustManagerUtils;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -20,23 +21,43 @@ public class FtpTransferClient implements RemoteTransferClient {
     private final String username;
     private final String password;
     private final boolean isFtps;
+    private final boolean trustSelfSigned;
     private FTPClient ftpClient;
 
     public FtpTransferClient(String host, int port, String username, String password, boolean isFtps) {
+        this(host, port, username, password, isFtps, true);
+    }
+
+    public FtpTransferClient(String host, int port, String username, String password, boolean isFtps, boolean trustSelfSigned) {
         this.host = host;
         this.port = port > 0 ? port : 21;
         this.username = username;
         this.password = password;
         this.isFtps = isFtps;
+        this.trustSelfSigned = trustSelfSigned;
+    }
+
+    public boolean isFtps() {
+        return isFtps;
     }
 
     @Override
     public void connect() throws Exception {
-        ftpClient = isFtps ? new FTPSClient() : new FTPClient();
+        if (isFtps) {
+            // Explicit TLS encryption (default port 21, sends AUTH TLS before authentication)
+            FTPSClient ftpsClient = new FTPSClient("TLS", false);
+            if (trustSelfSigned) {
+                ftpsClient.setTrustManager(TrustManagerUtils.getAcceptAllTrustManager());
+            }
+            ftpClient = ftpsClient;
+        } else {
+            ftpClient = new FTPClient();
+        }
+
         ftpClient.setConnectTimeout(15000);
         ftpClient.setDefaultTimeout(30000);
 
-        log.info("Connecting to FTP server {}:{} (FTPS: {})", host, port, isFtps);
+        log.info("Connecting to FTP server {}:{} (FTPS Explicit TLS: {})", host, port, isFtps);
         ftpClient.connect(host, port);
 
         int reply = ftpClient.getReplyCode();
@@ -51,6 +72,13 @@ public class FtpTransferClient implements RemoteTransferClient {
                 disconnect();
                 throw new RuntimeException("FTP authentication failed for user: " + username);
             }
+        }
+
+        // RFC 4217: Protect data channel with TLS encryption (PROT P)
+        if (isFtps && ftpClient instanceof FTPSClient ftpsClient) {
+            ftpsClient.execPBSZ(0);
+            ftpsClient.execPROT("P");
+            log.info("FTPS data channel protection set to Private (PROT P)");
         }
 
         ftpClient.enterLocalPassiveMode();

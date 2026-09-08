@@ -8,6 +8,14 @@ import com.custos.modules.transfer.model.ChunkMetadata;
 import com.custos.modules.transfer.model.TransferManifest;
 import com.custos.modules.transfer.service.ChecksumService;
 import com.custos.modules.transfer.service.StoragePrecheckService;
+import com.custos.modules.transfer.client.FtpTransferClient;
+import com.custos.modules.transfer.dto.TransferRequest;
+import com.custos.modules.transfer.service.ResilientTransferService;
+import com.custos.modules.vault.entity.CredentialType;
+import com.custos.modules.vault.entity.CredentialVault;
+import com.custos.modules.vault.repository.CredentialVaultRepository;
+import com.custos.modules.vault.service.VaultService;
+import com.custos.modules.vault.dto.DecryptedSecretPayload;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -17,6 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -35,6 +44,15 @@ class TransferTests {
 
     @Autowired
     private ChunkSplitterEngine chunkSplitterEngine;
+
+    @Autowired
+    private ResilientTransferService resilientTransferService;
+
+    @Autowired
+    private CredentialVaultRepository credentialVaultRepository;
+
+    @Autowired
+    private VaultService vaultService;
 
     @Test
     @DisplayName("TASK-501: ทดสอบ Storage Pre-check ตรวจสอบขนาดพื้นที่ว่างและตรวจจับพื้นที่ไม่พอ")
@@ -215,5 +233,110 @@ class TransferTests {
         assertEquals(1, totalRetries);
         // All 3 chunks reached destination
         assertEquals(3, uploadedChunks.size());
+    }
+
+    @Test
+    @DisplayName("TASK-504: ทดสอบ FtpTransferClient รองรับโหมด Explicit TLS (FTPS)")
+    void testFtpTransferClientExplicitTlsFlag() {
+        FtpTransferClient plainClient = new FtpTransferClient("ftp.example.com", 21, "user", "pass", false);
+        assertFalse(plainClient.isFtps(), "Plain FTP must have isFtps = false");
+
+        FtpTransferClient ftpsClient = new FtpTransferClient("ftps.example.com", 21, "user", "pass", true, true);
+        assertTrue(ftpsClient.isFtps(), "FTPS Explicit client must have isFtps = true");
+    }
+
+    @Test
+    @DisplayName("TASK-504: ทดสอบ ResilientTransferService สามารถ Resolve Credential FTP ที่ตั้งค่า Explicit TLS ได้ถูกต้อง")
+    void testResolveFtpTransferClientWithExplicitTlsMetadata() throws Exception {
+        String encrypted = vaultService.encryptJson(DecryptedSecretPayload.builder().password("ftpPass123").build());
+        CredentialVault vault = CredentialVault.builder()
+                .name("test-ftps-explicit-credential-" + UUID.randomUUID())
+                .credentialType(CredentialType.FTP)
+                .host("ftps.example.com")
+                .port(21)
+                .username("ftpuser")
+                .encryptedData(encrypted)
+                .extraMetadata("{\"ftpEncryption\":\"EXPLICIT_TLS\",\"trustSelfSigned\":true}")
+                .build();
+        vault = credentialVaultRepository.save(vault);
+
+        try {
+            Method method = ResilientTransferService.class.getDeclaredMethod("resolveTransferClient", TransferRequest.class);
+            method.setAccessible(true);
+
+            TransferRequest req = TransferRequest.builder()
+                    .sourceFilePath("dummy.tar.gz")
+                    .credentialId(vault.getId())
+                    .build();
+
+            RemoteTransferClient resolved = (RemoteTransferClient) method.invoke(resilientTransferService, req);
+            assertNotNull(resolved);
+            assertTrue(resolved instanceof FtpTransferClient, "Resolved client must be FtpTransferClient");
+            assertTrue(((FtpTransferClient) resolved).isFtps(), "Credential with EXPLICIT_TLS must resolve with isFtps = true");
+        } finally {
+            credentialVaultRepository.delete(vault);
+        }
+    }
+
+    @Test
+    @DisplayName("TASK-504: ทดสอบ ResilientTransferService สามารถ Resolve CredentialType.FTPS ได้เป็น FTPS เสมอ")
+    void testResolveFtpsTransferClientWithCredentialTypeFtps() throws Exception {
+        String encrypted = vaultService.encryptJson(DecryptedSecretPayload.builder().password("ftpsPass").build());
+        CredentialVault vault = CredentialVault.builder()
+                .name("test-ftps-type-credential-" + UUID.randomUUID())
+                .credentialType(CredentialType.FTPS)
+                .host("ftps.example.com")
+                .port(21)
+                .username("ftpsuser")
+                .encryptedData(encrypted)
+                .build();
+        vault = credentialVaultRepository.save(vault);
+
+        try {
+            Method method = ResilientTransferService.class.getDeclaredMethod("resolveTransferClient", TransferRequest.class);
+            method.setAccessible(true);
+
+            TransferRequest req = TransferRequest.builder()
+                    .sourceFilePath("dummy.tar.gz")
+                    .credentialId(vault.getId())
+                    .build();
+
+            RemoteTransferClient resolved = (RemoteTransferClient) method.invoke(resilientTransferService, req);
+            assertNotNull(resolved);
+            assertTrue(resolved instanceof FtpTransferClient, "Resolved client must be FtpTransferClient");
+            assertTrue(((FtpTransferClient) resolved).isFtps(), "Credential of type FTPS must resolve with isFtps = true");
+        } finally {
+            credentialVaultRepository.delete(vault);
+        }
+    }
+
+    @Test
+    @DisplayName("TASK-504: ทดสอบ ResilientTransferService สามารถ Resolve Direct Request ที่ระบุ FTPS หรือ Explicit TLS ได้ถูกต้อง")
+    void testResolveFtpTransferClientDirectExplicitTls() throws Exception {
+        Method method = ResilientTransferService.class.getDeclaredMethod("resolveTransferClient", TransferRequest.class);
+        method.setAccessible(true);
+
+        TransferRequest req1 = TransferRequest.builder()
+                .sourceFilePath("dummy.tar.gz")
+                .protocol("FTPS")
+                .host("ftps.example.com")
+                .port(21)
+                .username("user")
+                .password("pass")
+                .build();
+        RemoteTransferClient resolved1 = (RemoteTransferClient) method.invoke(resilientTransferService, req1);
+        assertTrue(((FtpTransferClient) resolved1).isFtps(), "Protocol FTPS must resolve with isFtps = true");
+
+        TransferRequest req2 = TransferRequest.builder()
+                .sourceFilePath("dummy.tar.gz")
+                .protocol("FTP")
+                .ftpEncryption("EXPLICIT_TLS")
+                .host("ftps.example.com")
+                .port(21)
+                .username("user")
+                .password("pass")
+                .build();
+        RemoteTransferClient resolved2 = (RemoteTransferClient) method.invoke(resilientTransferService, req2);
+        assertTrue(((FtpTransferClient) resolved2).isFtps(), "Protocol FTP with EXPLICIT_TLS must resolve with isFtps = true");
     }
 }

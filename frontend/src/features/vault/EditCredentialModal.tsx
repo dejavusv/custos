@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { vaultApi } from '../../services/vaultApi';
 import { CredentialResponse } from '../../types/vault';
 import {
@@ -25,6 +25,8 @@ const editCredentialSchema = z.object({
   secretPassword: z.string().optional(),
   sshPrivateKey: z.string().optional(),
   sshPassphrase: z.string().optional(),
+  ftpEncryption: z.enum(['EXPLICIT_TLS', 'NONE']).optional(),
+  trustSelfSigned: z.boolean().optional(),
 });
 
 type EditCredentialFormValues = z.infer<typeof editCredentialSchema>;
@@ -57,6 +59,17 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
 
   useEffect(() => {
     if (credential) {
+      let parsedFtpEnc: 'EXPLICIT_TLS' | 'NONE' = 'EXPLICIT_TLS';
+      let parsedTrustSelfSigned = true;
+
+      if (credential.extraMetadata) {
+        try {
+          const meta = JSON.parse(credential.extraMetadata);
+          if (meta.ftpEncryption) parsedFtpEnc = meta.ftpEncryption;
+          if (meta.trustSelfSigned !== undefined) parsedTrustSelfSigned = meta.trustSelfSigned;
+        } catch (ignored) {}
+      }
+
       reset({
         name: credential.name,
         description: credential.description || '',
@@ -67,6 +80,8 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
         secretPassword: '', // Blank means keep existing password
         sshPrivateKey: '',
         sshPassphrase: '',
+        ftpEncryption: parsedFtpEnc,
+        trustSelfSigned: parsedTrustSelfSigned,
       });
       setErrorMessage(null);
     }
@@ -79,6 +94,14 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
     setErrorMessage(null);
 
     try {
+      let extraMetadataStr = credential.extraMetadata;
+      if (credential.credentialType === 'FTP' || credential.credentialType === 'FTPS') {
+        extraMetadataStr = JSON.stringify({
+          ftpEncryption: values.ftpEncryption || 'EXPLICIT_TLS',
+          trustSelfSigned: values.trustSelfSigned ?? true,
+        });
+      }
+
       await vaultApi.updateCredential(credential.id, {
         name: values.name,
         description: values.description,
@@ -89,6 +112,7 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
         secretPassword: values.secretPassword || undefined,
         sshPrivateKey: values.sshPrivateKey || undefined,
         sshPassphrase: values.sshPassphrase || undefined,
+        extraMetadata: extraMetadataStr,
       });
 
       onSuccess();
@@ -106,6 +130,8 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
     credential.credentialType === 'DATABASE_POSTGRESQL' ||
     credential.credentialType === 'DATABASE_MYSQL';
   const isSftp = credential.credentialType === 'SFTP';
+  const isFtp =
+    credential.credentialType === 'FTP' || credential.credentialType === 'FTPS';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -227,6 +253,49 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
                   {...register('sshPassphrase')}
                   disabled={isLoading}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* FTP Encryption Configuration */}
+          {isFtp && (
+            <div className="space-y-3 p-3 border border-border rounded-lg bg-secondary/10">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                  การเข้ารหัสความปลอดภัย (FTP Encryption / Security)
+                </label>
+                <select
+                  {...register('ftpEncryption')}
+                  disabled={isLoading}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="EXPLICIT_TLS">
+                    TLS/SSL Explicit encryption (FTPS - แนะนำ / AUTH TLS พอร์ต 21)
+                  </option>
+                  <option value="NONE">
+                    None (Plain FTP - ไม่เข้ารหัส / Insecure)
+                  </option>
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Explicit TLS เชื่อมต่อพอร์ตมาตรฐาน (21) และยกระดับการเข้ารหัสทั้ง Control และ Data Channel (PROT P)
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="editTrustSelfSigned"
+                  {...register('trustSelfSigned')}
+                  disabled={isLoading}
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="editTrustSelfSigned"
+                  className="text-xs text-foreground cursor-pointer"
+                >
+                  ยอมรับใบรับรองแบบ Self-signed (Trust All SSL Certificates)
+                </label>
               </div>
             </div>
           )}

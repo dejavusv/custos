@@ -24,13 +24,15 @@ public class TransferRequest {
     private UUID executionId;
 
     // Direct parameters fallback
-    private String protocol; // "SFTP" or "FTP"
+    private String protocol; // "SFTP", "FTP", or "FTPS"
     private String host;
     private int port;
     private String username;
     private String password;
     private String sshPrivateKey;
     private String sshPassphrase;
+    private Boolean isFtps;
+    private String ftpEncryption; // "EXPLICIT_TLS" or "NONE"
 
     @Builder.Default
     private String remoteDirectory = "/upload";

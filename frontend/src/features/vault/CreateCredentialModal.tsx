@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { vaultApi } from '../../services/vaultApi';
 import { CredentialType } from '../../types/vault';
 import {
@@ -23,6 +23,7 @@ const createCredentialSchema = z.object({
     'DATABASE_POSTGRESQL',
     'SFTP',
     'FTP',
+    'FTPS',
     'GENERIC_SECRET',
   ]),
   host: z.string().optional(),
@@ -33,6 +34,8 @@ const createCredentialSchema = z.object({
   sshPrivateKey: z.string().optional(),
   sshPassphrase: z.string().optional(),
   sslMode: z.string().optional(),
+  ftpEncryption: z.enum(['EXPLICIT_TLS', 'NONE']).optional(),
+  trustSelfSigned: z.boolean().optional(),
 });
 
 type CreateCredentialFormValues = z.infer<typeof createCredentialSchema>;
@@ -81,6 +84,8 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
       sshPrivateKey: '',
       sshPassphrase: '',
       sslMode: 'prefer',
+      ftpEncryption: 'EXPLICIT_TLS',
+      trustSelfSigned: true,
     },
   });
 
@@ -100,7 +105,12 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
 
     try {
       let extraMetadataStr: string | undefined = undefined;
-      if (values.sslMode) {
+      if (values.credentialType === 'FTP' || values.credentialType === 'FTPS') {
+        extraMetadataStr = JSON.stringify({
+          ftpEncryption: values.ftpEncryption || 'EXPLICIT_TLS',
+          trustSelfSigned: values.trustSelfSigned ?? true,
+        });
+      } else if (values.sslMode) {
         extraMetadataStr = JSON.stringify({ sslMode: values.sslMode });
       }
 
@@ -304,6 +314,49 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
                   {...register('sshPassphrase')}
                   disabled={isLoading}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* FTP Encryption Configuration */}
+          {(selectedType === 'FTP' || selectedType === 'FTPS') && (
+            <div className="space-y-3 p-3 border border-border rounded-lg bg-secondary/10">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                  การเข้ารหัสความปลอดภัย (FTP Encryption / Security)
+                </label>
+                <select
+                  {...register('ftpEncryption')}
+                  disabled={isLoading}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="EXPLICIT_TLS">
+                    TLS/SSL Explicit encryption (FTPS - แนะนำ / AUTH TLS พอร์ต 21)
+                  </option>
+                  <option value="NONE">
+                    None (Plain FTP - ไม่เข้ารหัส / Insecure)
+                  </option>
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Explicit TLS เชื่อมต่อพอร์ตมาตรฐาน (21) และยกระดับการเข้ารหัสทั้ง Control และ Data Channel (PROT P)
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="trustSelfSigned"
+                  {...register('trustSelfSigned')}
+                  disabled={isLoading}
+                  className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                />
+                <label
+                  htmlFor="trustSelfSigned"
+                  className="text-xs text-foreground cursor-pointer"
+                >
+                  ยอมรับใบรับรองแบบ Self-signed (Trust All SSL Certificates)
+                </label>
               </div>
             </div>
           )}

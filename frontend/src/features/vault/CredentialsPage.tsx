@@ -69,8 +69,8 @@ export const CredentialsPage: React.FC = () => {
     },
   });
 
-  const getTypeBadge = (type: CredentialType) => {
-    switch (type) {
+  const getTypeBadge = (item: CredentialResponse) => {
+    switch (item.credentialType) {
       case 'DATABASE_POSTGRESQL':
         return (
           <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20 gap-1">
@@ -89,12 +89,30 @@ export const CredentialsPage: React.FC = () => {
             <Server className="w-3 h-3" /> SFTP
           </Badge>
         );
-      case 'FTP':
+      case 'FTPS':
         return (
-          <Badge variant="outline" className="bg-cyan-500/10 text-cyan-500 border-cyan-500/20 gap-1">
-            <Server className="w-3 h-3" /> FTP
+          <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 gap-1">
+            <ShieldCheck className="w-3 h-3" /> FTPS (Explicit TLS)
           </Badge>
         );
+      case 'FTP': {
+        let isExplicit = true;
+        if (item.extraMetadata) {
+          try {
+            const meta = JSON.parse(item.extraMetadata);
+            if (meta.ftpEncryption === 'NONE') isExplicit = false;
+          } catch (ignored) {}
+        }
+        return isExplicit ? (
+          <Badge variant="outline" className="bg-cyan-500/10 text-cyan-400 border-cyan-500/20 gap-1">
+            <ShieldCheck className="w-3 h-3" /> FTP (Explicit TLS)
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="bg-slate-500/10 text-slate-400 border-slate-500/20 gap-1">
+            <Server className="w-3 h-3" /> FTP (Plain)
+          </Badge>
+        );
+      }
       default:
         return (
           <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20 gap-1">
@@ -231,7 +249,7 @@ export const CredentialsPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">{getTypeBadge(item.credentialType)}</td>
+                    <td className="px-5 py-3.5">{getTypeBadge(item)}</td>
                     <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">
                       {item.host ? `${item.host}:${item.port || '-'}` : '-'}
                     </td>

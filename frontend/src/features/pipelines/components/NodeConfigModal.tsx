@@ -62,7 +62,9 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
     ) || [];
 
   const transferCredentials =
-    credentials?.filter((c) => c.credentialType === 'SFTP' || c.credentialType === 'FTP') || [];
+    credentials?.filter(
+      (c) => c.credentialType === 'SFTP' || c.credentialType === 'FTP' || c.credentialType === 'FTPS'
+    ) || [];
 
   useEffect(() => {
     setLabel(nodeLabel);
