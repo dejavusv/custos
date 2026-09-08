@@ -62,7 +62,9 @@ export const FileBackupNode: React.FC<NodeProps> = ({ data, selected }) => {
         </div>
         <div className="flex justify-between text-slate-400">
           <span>Format:</span>
-          <span className="font-mono text-slate-300">.tar.gz</span>
+          <span className="font-mono text-slate-300">
+            {nodeData.compressionFormat ? String(nodeData.compressionFormat) : 'TAR_GZ'}
+          </span>
         </div>
       </div>
 

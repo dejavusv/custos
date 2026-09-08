@@ -245,6 +245,30 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       EMAIL_ALERT: 'SES Notification',
     };
 
+    const defaultDataMap: Record<TaskType, Record<string, any>> = {
+      DATABASE_BACKUP: {
+        databaseName: '',
+        compressionFormat: 'GZIP',
+        destinationDir: 'storage/backups',
+      },
+      FILE_BACKUP: {
+        sourcePath: 'storage/data',
+        destinationDir: 'storage/backups',
+        compressionFormat: 'TAR_GZ',
+        exclusionPatterns: 'node_modules/**, *.log, temp/**, .git/**',
+      },
+      SPLIT_TRANSFER: {
+        sourceFilePath: '${last_output_path}',
+        remoteDirectory: '/upload',
+        chunkSizeMb: '50',
+        maxRetries: '3',
+      },
+      EMAIL_ALERT: {
+        recipient: 'devops@company.com',
+        subject: 'Custos Pipeline Report: ${last_output_path}',
+      },
+    };
+
     const newNode: Node = {
       id: `node-${Date.now()}`,
       type,
@@ -252,6 +276,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       data: {
         label: labelMap[type],
         nodeKey: key,
+        ...defaultDataMap[type],
       },
     };
 
