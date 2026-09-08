@@ -18,10 +18,15 @@ import com.custos.shared.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.custos.modules.backup.dto.StorageBrowseResponse;
+import com.custos.modules.backup.dto.StorageItemDto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
@@ -138,5 +143,136 @@ public class BackupService {
         }
 
         return result;
+    }
+
+    public StorageBrowseResponse browseStorage(String requestedPath) {
+        String targetPathStr = (requestedPath != null && !requestedPath.trim().isEmpty())
+                ? requestedPath.trim()
+                : defaultBackupDir;
+
+        if (targetPathStr.contains("..\\") || targetPathStr.contains("../") || targetPathStr.equals("..")) {
+            throw new SecurityException("Path traversal (..) is not permitted");
+        }
+
+        Path targetPath = Paths.get(targetPathStr).normalize();
+        File targetDir = targetPath.toFile();
+
+        // If target is defaultBackupDir and doesn't exist, create it automatically
+        if (!targetDir.exists() && targetPathStr.equals(defaultBackupDir)) {
+            targetDir.mkdirs();
+        }
+
+        if (!targetDir.exists()) {
+            throw new IllegalArgumentException("Path does not exist: " + targetPathStr);
+        }
+
+        if (!targetDir.isDirectory()) {
+            if (targetDir.isFile() && targetDir.getParentFile() != null) {
+                targetDir = targetDir.getParentFile();
+            } else {
+                throw new IllegalArgumentException("Path is not a directory: " + targetPathStr);
+            }
+        }
+
+        List<StorageItemDto> items = new ArrayList<>();
+        File[] files = targetDir.listFiles();
+
+        if (files != null) {
+            for (File f : files) {
+                if (f.isHidden()) {
+                    continue;
+                }
+
+                String name = f.getName();
+                boolean isDir = f.isDirectory();
+                long size = isDir ? 0L : f.length();
+                Instant lastMod = Instant.ofEpochMilli(f.lastModified());
+                String ext = isDir ? null : extractExtension(name);
+
+                String itemPath = f.getPath().replace('\\', '/');
+
+                items.add(StorageItemDto.builder()
+                        .name(name)
+                        .path(itemPath)
+                        .absolutePath(f.getAbsolutePath().replace('\\', '/'))
+                        .isDirectory(isDir)
+                        .sizeBytes(size)
+                        .lastModified(lastMod)
+                        .extension(ext)
+                        .build());
+            }
+
+            items.sort((a, b) -> {
+                if (a.isDirectory() != b.isDirectory()) {
+                    return a.isDirectory() ? -1 : 1;
+                }
+                return a.getName().compareToIgnoreCase(b.getName());
+            });
+        }
+
+        File parentFile = targetDir.getParentFile();
+        String parentPathStr = parentFile != null ? parentFile.getPath().replace('\\', '/') : null;
+        boolean canGoUp = parentFile != null && parentFile.exists();
+
+        return StorageBrowseResponse.builder()
+                .currentPath(targetDir.getPath().replace('\\', '/'))
+                .absolutePath(targetDir.getAbsolutePath().replace('\\', '/'))
+                .defaultDirectory(defaultBackupDir.replace('\\', '/'))
+                .parentPath(parentPathStr)
+                .canGoUp(canGoUp)
+                .items(items)
+                .build();
+    }
+
+    public StorageItemDto createDirectory(String parentPath, String folderName) {
+        if (folderName == null || folderName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Folder name cannot be empty");
+        }
+
+        String cleanName = folderName.trim();
+        if (cleanName.contains("/") || cleanName.contains("\\") || cleanName.contains("..")) {
+            throw new SecurityException("Invalid folder name: " + cleanName);
+        }
+
+        String parentPathStr = (parentPath != null && !parentPath.trim().isEmpty())
+                ? parentPath.trim()
+                : defaultBackupDir;
+
+        if (parentPathStr.contains("..\\") || parentPathStr.contains("../") || parentPathStr.equals("..")) {
+            throw new SecurityException("Path traversal (..) is not permitted");
+        }
+
+        File parent = new File(parentPathStr);
+        if (!parent.exists()) {
+            parent.mkdirs();
+        }
+
+        File newDir = new File(parent, cleanName);
+        if (newDir.exists()) {
+            throw new IllegalArgumentException("Directory already exists: " + cleanName);
+        }
+
+        boolean created = newDir.mkdirs();
+        if (!created) {
+            throw new RuntimeException("Failed to create directory: " + cleanName);
+        }
+
+        return StorageItemDto.builder()
+                .name(cleanName)
+                .path(newDir.getPath().replace('\\', '/'))
+                .absolutePath(newDir.getAbsolutePath().replace('\\', '/'))
+                .isDirectory(true)
+                .sizeBytes(0L)
+                .lastModified(Instant.now())
+                .extension(null)
+                .build();
+    }
+
+    private String extractExtension(String fileName) {
+        if (fileName == null) return null;
+        if (fileName.endsWith(".tar.gz")) return "tar.gz";
+        if (fileName.endsWith(".sql.gz")) return "sql.gz";
+        int lastDot = fileName.lastIndexOf('.');
+        return (lastDot > 0 && lastDot < fileName.length() - 1) ? fileName.substring(lastDot + 1) : null;
     }
 }

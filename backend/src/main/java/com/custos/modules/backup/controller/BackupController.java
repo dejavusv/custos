@@ -1,10 +1,7 @@
 package com.custos.modules.backup.controller;
 
 import com.custos.modules.auth.security.UserPrincipal;
-import com.custos.modules.backup.dto.DatabaseBackupRequest;
-import com.custos.modules.backup.dto.FileBackupRequest;
-import com.custos.modules.backup.dto.RetentionCleanupRequest;
-import com.custos.modules.backup.dto.RetentionCleanupResult;
+import com.custos.modules.backup.dto.*;
 import com.custos.modules.backup.model.BackupResult;
 import com.custos.modules.backup.service.BackupService;
 import com.custos.modules.backup.service.RetentionCleanupService;
@@ -15,10 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/backup")
@@ -59,5 +53,23 @@ public class BackupController {
     ) {
         RetentionCleanupResult result = retentionCleanupService.executeRetentionCleanup(request, currentUser, servletRequest);
         return ResponseEntity.ok(ApiResponse.ok(result, result.getMessage()));
+    }
+
+    @GetMapping("/storage/browse")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_OPERATOR')")
+    public ResponseEntity<ApiResponse<StorageBrowseResponse>> browseStorage(
+            @RequestParam(value = "path", required = false) String path
+    ) {
+        StorageBrowseResponse response = backupService.browseStorage(path);
+        return ResponseEntity.ok(ApiResponse.ok(response, "Storage directory listed successfully"));
+    }
+
+    @PostMapping("/storage/mkdir")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_OPERATOR')")
+    public ResponseEntity<ApiResponse<StorageItemDto>> createDirectory(
+            @Valid @RequestBody CreateDirectoryRequest request
+    ) {
+        StorageItemDto created = backupService.createDirectory(request.getParentPath(), request.getFolderName());
+        return ResponseEntity.ok(ApiResponse.ok(created, "Directory created successfully"));
     }
 }

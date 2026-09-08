@@ -7,11 +7,11 @@ import com.custos.modules.backup.database.MySqlBackupEngine;
 import com.custos.modules.backup.database.PostgreSqlBackupEngine;
 import com.custos.modules.backup.dto.DatabaseBackupRequest;
 import com.custos.modules.backup.dto.FileBackupRequest;
-import com.custos.modules.backup.dto.RetentionCleanupRequest;
-import com.custos.modules.backup.dto.RetentionCleanupResult;
+import com.custos.modules.backup.dto.*;
 import com.custos.modules.backup.filesystem.FileSystemBackupEngine;
 import com.custos.modules.backup.model.BackupResult;
 import com.custos.modules.backup.model.CompressionFormat;
+import com.custos.modules.backup.service.BackupService;
 import com.custos.modules.backup.service.RetentionCleanupService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,6 +49,9 @@ class BackupTests {
 
     @Autowired
     private RetentionCleanupService retentionCleanupService;
+
+    @Autowired
+    private BackupService backupService;
 
     @Autowired
     private UserRepository userRepository;
@@ -241,5 +244,57 @@ class BackupTests {
 
         // Verify fresh file remains intact
         assertTrue(Files.exists(freshFile), "Fresh file must be preserved");
+    }
+
+    @Test
+    @DisplayName("TASK-406: ทดสอบ Storage Browser API, การเรียงลำดับโฟลเดอร์/ไฟล์ และการป้องกัน Path Traversal")
+    void testBrowseStorageAndCreateDirectory(@TempDir Path storageRoot) throws IOException {
+        // Prepare directories and files
+        Path subDir1 = storageRoot.resolve("daily_backups");
+        Path subDir2 = storageRoot.resolve("archive_storage");
+        Files.createDirectories(subDir1);
+        Files.createDirectories(subDir2);
+
+        Path file1 = storageRoot.resolve("mysql_custos_20260908.sql.gz");
+        Path file2 = storageRoot.resolve("report_snapshot.tar.gz");
+        Files.writeString(file1, "mysql backup content");
+        Files.writeString(file2, "archive content");
+
+        // 1. Browse directory
+        StorageBrowseResponse response = backupService.browseStorage(storageRoot.toString());
+        assertNotNull(response);
+        assertNotNull(response.getItems());
+        assertEquals(4, response.getItems().size());
+
+        // Directories must come first
+        assertTrue(response.getItems().get(0).isDirectory());
+        assertTrue(response.getItems().get(1).isDirectory());
+        assertFalse(response.getItems().get(2).isDirectory());
+        assertFalse(response.getItems().get(3).isDirectory());
+
+        // Check extensions
+        assertEquals("sql.gz", response.getItems().get(2).getExtension());
+        assertEquals("tar.gz", response.getItems().get(3).getExtension());
+
+        // 2. Create new subfolder
+        StorageItemDto createdFolder = backupService.createDirectory(storageRoot.toString(), "monthly_backups");
+        assertNotNull(createdFolder);
+        assertEquals("monthly_backups", createdFolder.getName());
+        assertTrue(createdFolder.isDirectory());
+        assertTrue(Files.exists(storageRoot.resolve("monthly_backups")));
+
+        // 3. Prevent duplicate creation
+        assertThrows(IllegalArgumentException.class, () ->
+                backupService.createDirectory(storageRoot.toString(), "monthly_backups"));
+
+        // 4. Security checks: Directory Traversal rejection
+        assertThrows(SecurityException.class, () ->
+                backupService.browseStorage("../../../etc"));
+        assertThrows(SecurityException.class, () ->
+                backupService.browseStorage("..\\..\\windows"));
+        assertThrows(SecurityException.class, () ->
+                backupService.createDirectory(storageRoot.toString(), "../dangerous"));
+        assertThrows(SecurityException.class, () ->
+                backupService.createDirectory(storageRoot.toString(), "sub/nested"));
     }
 }

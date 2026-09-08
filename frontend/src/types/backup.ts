@@ -52,3 +52,28 @@ export interface RetentionCleanupResult {
   executedAt: string;
   message: string;
 }
+
+export interface StorageItem {
+  name: string;
+  path: string;
+  absolutePath: string;
+  isDirectory: boolean;
+  sizeBytes: number;
+  lastModified: string;
+  extension?: string | null;
+}
+
+export interface StorageBrowseResponse {
+  currentPath: string;
+  absolutePath: string;
+  defaultDirectory: string;
+  parentPath?: string | null;
+  canGoUp: boolean;
+  items: StorageItem[];
+}
+
+export interface CreateDirectoryRequest {
+  parentPath: string;
+  folderName: string;
+}
+

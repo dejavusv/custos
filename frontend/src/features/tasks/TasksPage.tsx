@@ -17,6 +17,7 @@ import {
   Server,
   Layers,
   FileCheck,
+  FolderOpen,
 } from 'lucide-react';
 import { vaultApi } from '../../services/vaultApi';
 import { backupApi } from '../../services/backupApi';
@@ -34,6 +35,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { StorageBrowserDialog } from '../../components/storage/StorageBrowserDialog';
 
 export const TasksPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'database' | 'filesystem' | 'retention' | 'transfer'>('database');
@@ -44,11 +46,13 @@ export const TasksPage: React.FC = () => {
   const [dbName, setDbName] = useState('');
   const [tables, setTables] = useState('');
   const [dbCompression, setDbCompression] = useState<CompressionFormat>('GZIP');
+  const [dbDestinationDir, setDbDestinationDir] = useState('');
   const [dbResult, setDbResult] = useState<BackupResult | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
 
   // File Backup Form State
   const [sourcePath, setSourcePath] = useState('');
+  const [fileDestinationDir, setFileDestinationDir] = useState('');
   const [fileCompression, setFileCompression] = useState<CompressionFormat>('TAR_GZ');
   const [exclusions, setExclusions] = useState('node_modules/**, *.log, temp/**');
   const [fileResult, setFileResult] = useState<BackupResult | null>(null);
@@ -72,6 +76,58 @@ export const TasksPage: React.FC = () => {
   const [splitManifest, setSplitManifest] = useState<TransferManifest | null>(null);
   const [transferResult, setTransferResult] = useState<TransferResult | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
+
+  // Storage Browser Dialog State
+  type TargetField =
+    | 'dbDestinationDir'
+    | 'sourcePath'
+    | 'fileDestinationDir'
+    | 'transferSourceFile'
+    | 'precheckPath'
+    | 'cleanupDir';
+
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserMode, setBrowserMode] = useState<'folder' | 'file' | 'both'>('folder');
+  const [browserTitle, setBrowserTitle] = useState('เลือกโฟลเดอร์จาก Storage บน Server');
+  const [browserTargetField, setBrowserTargetField] = useState<TargetField | null>(null);
+  const [browserInitialPath, setBrowserInitialPath] = useState<string | undefined>(undefined);
+
+  const openBrowser = (
+    field: TargetField,
+    mode: 'folder' | 'file' | 'both' = 'folder',
+    title?: string,
+    initialVal?: string
+  ) => {
+    setBrowserTargetField(field);
+    setBrowserMode(mode);
+    setBrowserTitle(title || (mode === 'file' ? 'เลือกไฟล์จาก Storage บน Server' : 'เลือกโฟลเดอร์จาก Storage บน Server'));
+    setBrowserInitialPath(initialVal || undefined);
+    setBrowserOpen(true);
+  };
+
+  const handleStorageSelect = (selectedPath: string) => {
+    if (!browserTargetField) return;
+    switch (browserTargetField) {
+      case 'dbDestinationDir':
+        setDbDestinationDir(selectedPath);
+        break;
+      case 'sourcePath':
+        setSourcePath(selectedPath);
+        break;
+      case 'fileDestinationDir':
+        setFileDestinationDir(selectedPath);
+        break;
+      case 'transferSourceFile':
+        setTransferSourceFile(selectedPath);
+        break;
+      case 'precheckPath':
+        setPrecheckPath(selectedPath);
+        break;
+      case 'cleanupDir':
+        setCleanupDir(selectedPath);
+        break;
+    }
+  };
 
   // Fetch credentials for DB and Transfer dropdowns
   const { data: credentials } = useQuery({
@@ -106,6 +162,7 @@ export const TasksPage: React.FC = () => {
         databaseName: dbName.trim(),
         tables: tablesList,
         compressionFormat: dbCompression,
+        destinationDir: dbDestinationDir.trim() || undefined,
       });
     },
     onSuccess: (data) => setDbResult(data),
@@ -120,6 +177,7 @@ export const TasksPage: React.FC = () => {
       const exclusionList = exclusions.trim() ? exclusions.split(',').map((e) => e.trim()) : undefined;
       return await backupApi.triggerFileSystemBackup({
         sourcePath: sourcePath.trim(),
+        destinationDir: fileDestinationDir.trim() || undefined,
         compressionFormat: fileCompression,
         exclusionPatterns: exclusionList,
       });
@@ -336,6 +394,38 @@ export const TasksPage: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>โฟลเดอร์ปลายทางสำหรับจัดเก็บไฟล์ (Destination Directory)</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">
+                    (เว้นว่างเพื่อใช้ดีฟอลต์จาก server: custos.backup.default-directory)
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="เช่น storage/backups"
+                    value={dbDestinationDir}
+                    onChange={(e) => setDbDestinationDir(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      openBrowser(
+                        'dbDestinationDir',
+                        'folder',
+                        'เลือกโฟลเดอร์ปลายทางสำหรับจัดเก็บ Database Backup',
+                        dbDestinationDir
+                      )
+                    }
+                    className="flex items-center gap-1.5 shrink-0"
+                  >
+                    <FolderOpen className="w-4 h-4 text-primary" />
+                    <span>เลือกโฟลเดอร์</span>
+                  </Button>
+                </div>
+              </div>
+
               <Button
                 onClick={() => dbBackupMutation.mutate()}
                 disabled={!dbName.trim() || dbBackupMutation.isPending}
@@ -430,13 +520,31 @@ export const TasksPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
-                  พาธโฟลเดอร์ต้นทาง (Source Directory Path) <span className="text-destructive">*</span>
+                  พาธโฟลเดอร์หรือไฟล์ต้นทาง (Source Path) <span className="text-destructive">*</span>
                 </label>
-                <Input
-                  placeholder="เช่น C:\myproject หรือ /var/www/html"
-                  value={sourcePath}
-                  onChange={(e) => setSourcePath(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="เช่น storage หรือ storage/backups หรือ /var/www/html"
+                    value={sourcePath}
+                    onChange={(e) => setSourcePath(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      openBrowser(
+                        'sourcePath',
+                        'both',
+                        'เลือกไฟล์หรือโฟลเดอร์ต้นทาง (Source Path)',
+                        sourcePath
+                      )
+                    }
+                    className="flex items-center gap-1.5 shrink-0"
+                  >
+                    <FolderOpen className="w-4 h-4 text-primary" />
+                    <span>เลือกจาก Server</span>
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -478,6 +586,38 @@ export const TasksPage: React.FC = () => {
                   value={exclusions}
                   onChange={(e) => setExclusions(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>โฟลเดอร์ปลายทางสำหรับจัดเก็บไฟล์ (Destination Directory)</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">
+                    (เว้นว่างเพื่อใช้ดีฟอลต์จาก server: custos.backup.default-directory)
+                  </span>
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="เช่น storage/backups"
+                    value={fileDestinationDir}
+                    onChange={(e) => setFileDestinationDir(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      openBrowser(
+                        'fileDestinationDir',
+                        'folder',
+                        'เลือกโฟลเดอร์ปลายทางสำหรับจัดเก็บ Archive',
+                        fileDestinationDir
+                      )
+                    }
+                    className="flex items-center gap-1.5 shrink-0"
+                  >
+                    <FolderOpen className="w-4 h-4 text-primary" />
+                    <span>เลือกโฟลเดอร์</span>
+                  </Button>
+                </div>
               </div>
 
               <Button
@@ -577,11 +717,29 @@ export const TasksPage: React.FC = () => {
                   <label className="text-xs font-semibold text-foreground">
                     ไฟล์ต้นทางที่ต้องการแบ่งส่วน/ส่ง (Source File Path) <span className="text-destructive">*</span>
                   </label>
-                  <Input
-                    placeholder="เช่น storage/backups/production_db_20260906.sql.gz"
-                    value={transferSourceFile}
-                    onChange={(e) => setTransferSourceFile(e.target.value)}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="เช่น storage/backups/production_db_20260906.sql.gz"
+                      value={transferSourceFile}
+                      onChange={(e) => setTransferSourceFile(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        openBrowser(
+                          'transferSourceFile',
+                          'file',
+                          'เลือกไฟล์ต้นทางสำหรับ Chunk Split & Transfer',
+                          transferSourceFile
+                        )
+                      }
+                      className="flex items-center gap-1.5 shrink-0"
+                    >
+                      <FolderOpen className="w-4 h-4 text-primary" />
+                      <span>เลือกไฟล์</span>
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -676,12 +834,30 @@ export const TasksPage: React.FC = () => {
                 <CardContent className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">ตำแหน่งดิสก์ที่ต้องการตรวจสอบ</label>
-                    <Input
-                      value={precheckPath}
-                      onChange={(e) => setPrecheckPath(e.target.value)}
-                      placeholder="เช่น storage/backups"
-                      className="text-xs"
-                    />
+                    <div className="flex gap-2">
+                      <Input
+                        value={precheckPath}
+                        onChange={(e) => setPrecheckPath(e.target.value)}
+                        placeholder="เช่น storage/backups"
+                        className="text-xs"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          openBrowser(
+                            'precheckPath',
+                            'folder',
+                            'เลือกตำแหน่งโฟลเดอร์สำหรับตรวจเช็คดิสก์',
+                            precheckPath
+                          )
+                        }
+                        className="px-2 shrink-0"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 text-primary" />
+                      </Button>
+                    </div>
                   </div>
                   <Button
                     size="sm"
@@ -817,11 +993,29 @@ export const TasksPage: React.FC = () => {
                 <label className="text-xs font-semibold text-foreground">
                   ไดเรกทอรีจัดเก็บไฟล์สำรอง (Backup Directory) <span className="text-destructive">*</span>
                 </label>
-                <Input
-                  placeholder="เช่น storage/backups"
-                  value={cleanupDir}
-                  onChange={(e) => setCleanupDir(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="เช่น storage/backups"
+                    value={cleanupDir}
+                    onChange={(e) => setCleanupDir(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      openBrowser(
+                        'cleanupDir',
+                        'folder',
+                        'เลือกโฟลเดอร์สำหรับสแกน Retention Policy',
+                        cleanupDir
+                      )
+                    }
+                    className="flex items-center gap-1.5 shrink-0"
+                  >
+                    <FolderOpen className="w-4 h-4 text-primary" />
+                    <span>เลือกโฟลเดอร์</span>
+                  </Button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -922,6 +1116,16 @@ export const TasksPage: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Storage Browser Dialog */}
+      <StorageBrowserDialog
+        open={browserOpen}
+        onOpenChange={setBrowserOpen}
+        onSelect={handleStorageSelect}
+        title={browserTitle}
+        mode={browserMode}
+        initialPath={browserInitialPath}
+      />
     </div>
   );
 };
