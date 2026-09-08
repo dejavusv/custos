@@ -55,6 +55,14 @@ export const DatabaseBackupNode: React.FC<NodeProps> = ({ data, selected }) => {
       </div>
 
       <div className="space-y-1 pt-1 border-t border-slate-800/80 text-[11px]">
+        {Boolean(nodeData.credentialName) && (
+          <div className="flex justify-between text-slate-400">
+            <span>Vault:</span>
+            <span className="font-mono text-emerald-400 font-medium truncate max-w-[120px]">
+              {String(nodeData.credentialName)}
+            </span>
+          </div>
+        )}
         <div className="flex justify-between text-slate-400">
           <span>Target DB:</span>
           <span className="font-mono text-blue-300 font-medium truncate max-w-[110px]">
@@ -63,7 +71,9 @@ export const DatabaseBackupNode: React.FC<NodeProps> = ({ data, selected }) => {
         </div>
         <div className="flex justify-between text-slate-400">
           <span>Format:</span>
-          <span className="font-mono text-slate-300">GZIP (.sql.gz)</span>
+          <span className="font-mono text-slate-300">
+            {nodeData.compressionFormat ? String(nodeData.compressionFormat) : 'GZIP'}
+          </span>
         </div>
       </div>
 

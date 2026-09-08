@@ -57,13 +57,21 @@ export const TransferNode: React.FC<NodeProps> = ({ data, selected }) => {
 
       <div className="space-y-1 pt-1 border-t border-slate-800/80 text-[11px]">
         <div className="flex justify-between text-slate-400">
-          <span>Protocol:</span>
-          <span className="font-mono text-purple-300 font-medium">
-            {nodeData.protocol || 'SFTP'} (Sequential)
+          <span>Target:</span>
+          <span className="font-mono text-purple-300 font-medium truncate max-w-[120px]">
+            {nodeData.credentialName
+              ? String(nodeData.credentialName)
+              : `${nodeData.protocol || 'SFTP'}`}
           </span>
         </div>
         <div className="flex justify-between text-slate-400">
-          <span>Remote Dir:</span>
+          <span>Chunk:</span>
+          <span className="font-mono text-slate-300">
+            {nodeData.chunkSizeMb ? `${nodeData.chunkSizeMb} MB` : '50 MB'}
+          </span>
+        </div>
+        <div className="flex justify-between text-slate-400">
+          <span>Remote:</span>
           <span className="font-mono text-slate-300 truncate max-w-[110px]">
             {nodeData.remoteDirectory || '/upload'}
           </span>

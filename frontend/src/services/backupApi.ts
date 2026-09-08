@@ -6,6 +6,9 @@ import {
   FileBackupRequest,
   RetentionCleanupRequest,
   RetentionCleanupResult,
+  StorageBrowseResponse,
+  StorageItem,
+  CreateDirectoryRequest,
 } from '../types/backup';
 
 export const backupApi = {
@@ -34,6 +37,22 @@ export const backupApi = {
   ): Promise<RetentionCleanupResult> => {
     const response = await api.post<ApiResponse<RetentionCleanupResult>>(
       '/backup/retention-cleanup',
+      data
+    );
+    return response.data.data!;
+  },
+
+  browseStorage: async (path?: string): Promise<StorageBrowseResponse> => {
+    const response = await api.get<ApiResponse<StorageBrowseResponse>>(
+      '/backup/storage/browse',
+      { params: path ? { path } : {} }
+    );
+    return response.data.data!;
+  },
+
+  createDirectory: async (data: CreateDirectoryRequest): Promise<StorageItem> => {
+    const response = await api.post<ApiResponse<StorageItem>>(
+      '/backup/storage/mkdir',
       data
     );
     return response.data.data!;

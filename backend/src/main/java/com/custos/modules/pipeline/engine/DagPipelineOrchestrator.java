@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -215,19 +216,39 @@ public class DagPipelineOrchestrator {
 
         switch (node.getNodeType()) {
             case DATABASE_BACKUP -> {
+                CompressionFormat compFormat = CompressionFormat.GZIP;
+                if (config.get("compressionFormat") != null && !config.get("compressionFormat").toString().isBlank()) {
+                    try {
+                        compFormat = CompressionFormat.valueOf(config.get("compressionFormat").toString().toUpperCase());
+                    } catch (Exception ignored) {}
+                }
+
+                List<String> tableList = null;
+                if (config.get("tables") != null && !config.get("tables").toString().isBlank()) {
+                    tableList = Arrays.stream(config.get("tables").toString().split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toList());
+                }
+
                 DatabaseBackupRequest req = DatabaseBackupRequest.builder()
                         .databaseName(context.resolvePlaceholders((String) config.getOrDefault("databaseName", "")))
                         .host(context.resolvePlaceholders((String) config.getOrDefault("host", "localhost")))
-                        .port(config.get("port") != null ? Integer.parseInt(config.get("port").toString()) : 5432)
+                        .port(config.get("port") != null && !config.get("port").toString().isBlank() ? Integer.parseInt(config.get("port").toString()) : 5432)
                         .username(context.resolvePlaceholders((String) config.getOrDefault("username", "")))
                         .password((String) config.getOrDefault("password", ""))
+                        .tables(tableList)
                         .destinationDir(context.resolvePlaceholders((String) config.getOrDefault("destinationDir", "storage/backups")))
                         .customFileName(context.resolvePlaceholders((String) config.get("customFileName")))
-                        .compressionFormat(CompressionFormat.GZIP)
+                        .compressionFormat(compFormat)
                         .build();
 
-                if (config.get("credentialId") != null) {
-                    req.setCredentialId(UUID.fromString(config.get("credentialId").toString()));
+                if (config.get("credentialId") != null && !config.get("credentialId").toString().isBlank()) {
+                    try {
+                        req.setCredentialId(UUID.fromString(config.get("credentialId").toString()));
+                    } catch (Exception e) {
+                        log.warn("Invalid credentialId UUID in database backup step: {}", config.get("credentialId"));
+                    }
                 }
 
                 BackupResult result = backupService.backupDatabase(req, null, null);
@@ -240,11 +261,27 @@ public class DagPipelineOrchestrator {
             }
 
             case FILE_BACKUP -> {
+                CompressionFormat compFormat = CompressionFormat.TAR_GZ;
+                if (config.get("compressionFormat") != null && !config.get("compressionFormat").toString().isBlank()) {
+                    try {
+                        compFormat = CompressionFormat.valueOf(config.get("compressionFormat").toString().toUpperCase());
+                    } catch (Exception ignored) {}
+                }
+
+                List<String> exclusionList = null;
+                if (config.get("exclusionPatterns") != null && !config.get("exclusionPatterns").toString().isBlank()) {
+                    exclusionList = Arrays.stream(config.get("exclusionPatterns").toString().split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty())
+                            .collect(Collectors.toList());
+                }
+
                 FileBackupRequest req = FileBackupRequest.builder()
                         .sourcePath(context.resolvePlaceholders((String) config.getOrDefault("sourcePath", "")))
                         .destinationDir(context.resolvePlaceholders((String) config.getOrDefault("destinationDir", "storage/backups")))
                         .customFileName(context.resolvePlaceholders((String) config.get("customFileName")))
-                        .compressionFormat(CompressionFormat.TAR_GZ)
+                        .compressionFormat(compFormat)
+                        .exclusionPatterns(exclusionList)
                         .build();
 
                 BackupResult result = backupService.backupFileSystem(req, null, null);
@@ -264,20 +301,31 @@ public class DagPipelineOrchestrator {
                     sourceFile = context.resolvePlaceholders(sourceFile);
                 }
 
-                long chunkSize = config.get("chunkSizeBytes") != null
-                        ? Long.parseLong(config.get("chunkSizeBytes").toString())
-                        : 100 * 1024 * 1024L;
+                long chunkSize = 50 * 1024 * 1024L; // Default 50MB
+                if (config.get("chunkSizeMb") != null && !config.get("chunkSizeMb").toString().isBlank()) {
+                    try {
+                        chunkSize = Long.parseLong(config.get("chunkSizeMb").toString()) * 1024 * 1024L;
+                    } catch (Exception ignored) {}
+                } else if (config.get("chunkSizeBytes") != null && !config.get("chunkSizeBytes").toString().isBlank()) {
+                    try {
+                        chunkSize = Long.parseLong(config.get("chunkSizeBytes").toString());
+                    } catch (Exception ignored) {}
+                }
 
                 TransferRequest req = TransferRequest.builder()
                         .sourceFilePath(sourceFile)
                         .chunkSizeBytes(chunkSize)
                         .remoteDirectory(context.resolvePlaceholders((String) config.getOrDefault("remoteDirectory", "/upload")))
-                        .maxRetriesPerChunk(config.get("maxRetries") != null ? Integer.parseInt(config.get("maxRetries").toString()) : 3)
+                        .maxRetriesPerChunk(config.get("maxRetries") != null && !config.get("maxRetries").toString().isBlank() ? Integer.parseInt(config.get("maxRetries").toString()) : 3)
                         .executionId(executionId)
                         .build();
 
-                if (config.get("credentialId") != null) {
-                    req.setCredentialId(UUID.fromString(config.get("credentialId").toString()));
+                if (config.get("credentialId") != null && !config.get("credentialId").toString().isBlank()) {
+                    try {
+                        req.setCredentialId(UUID.fromString(config.get("credentialId").toString()));
+                    } catch (Exception e) {
+                        log.warn("Invalid credentialId UUID in transfer step: {}", config.get("credentialId"));
+                    }
                 }
 
                 TransferResult result = resilientTransferService.transferFile(req, null, null);

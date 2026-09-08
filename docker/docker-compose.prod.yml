@@ -60,6 +60,7 @@ services:
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      CUSTOS_BACKUP_DEFAULT_DIRECTORY: /var/custos/staging
     volumes:
       - staging_prod_data:/var/custos/staging
     networks:

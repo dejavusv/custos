@@ -46,13 +46,14 @@ backend/logs/
 spring.log
 
 # Temporary Backup Dumps, Chunks & Storage Data
-temp/
-tmp/
-storage/
-backups/
+/temp/
+/tmp/
+/storage/
+/backups/
 backend/temp/
 backend/storage/
 backend/backups/
+!frontend/src/components/storage/
 *.part*
 *.dump
 *.sql.gz
