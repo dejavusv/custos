@@ -25,6 +25,7 @@ public class ProcessSanitizer {
     // Whitelisted binaries allowed to be invoked directly
     private static final Set<String> ALLOWED_EXECUTABLES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "mysqldump", "mysqldump.exe",
+            "mariadb-dump", "mariadb-dump.exe",
             "pg_dump", "pg_dump.exe",
             "tar", "tar.exe",
             "gzip", "gzip.exe",

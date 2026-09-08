@@ -32,7 +32,21 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsers(String query, UserStatus status, Pageable pageable) {
-        return userRepository.searchUsers(query, status, pageable).map(UserResponse::fromEntity);
+        boolean hasQuery = query != null && !query.trim().isEmpty();
+        boolean hasStatus = status != null;
+
+        Page<User> users;
+        if (hasQuery && hasStatus) {
+            users = userRepository.searchByQueryAndStatus(query.trim(), status, pageable);
+        } else if (hasQuery) {
+            users = userRepository.searchByQuery(query.trim(), pageable);
+        } else if (hasStatus) {
+            users = userRepository.findByStatus(status, pageable);
+        } else {
+            users = userRepository.findAll(pageable);
+        }
+
+        return users.map(UserResponse::fromEntity);
     }
 
     @Transactional(readOnly = true)

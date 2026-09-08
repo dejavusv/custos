@@ -105,6 +105,7 @@ class VaultTests {
     void testProcessSanitizerBlocksCommandInjection() {
         // Safe commands and identifiers
         assertDoesNotThrow(() -> processSanitizer.validateExecutable("mysqldump"));
+        assertDoesNotThrow(() -> processSanitizer.validateExecutable("mariadb-dump"));
         assertDoesNotThrow(() -> processSanitizer.validateExecutable("pg_dump"));
         assertDoesNotThrow(() -> processSanitizer.validateExecutable("tar"));
         assertDoesNotThrow(() -> processSanitizer.validateIdentifier("customer_db_2026", "databaseName"));

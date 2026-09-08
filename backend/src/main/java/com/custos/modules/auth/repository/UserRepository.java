@@ -19,8 +19,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
 
+    Page<User> findByStatus(UserStatus status, Pageable pageable);
+
     @Query("SELECT u FROM User u WHERE " +
-           "(:query IS NULL OR LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))) " +
-           "AND (:status IS NULL OR u.status = :status)")
-    Page<User> searchUsers(@Param("query") String query, @Param("status") UserStatus status, Pageable pageable);
+           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))")
+    Page<User> searchByQuery(@Param("query") String query, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.status = :status AND (" +
+           "LOWER(u.username) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')))")
+    Page<User> searchByQueryAndStatus(@Param("query") String query, @Param("status") UserStatus status, Pageable pageable);
 }

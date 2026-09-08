@@ -43,7 +43,18 @@ public class AuditLogService {
     }
 
     public Page<AuditLog> getLogs(String username, String action, Pageable pageable) {
-        return auditLogRepository.searchLogs(username, action, pageable);
+        boolean hasUsername = username != null && !username.trim().isEmpty();
+        boolean hasAction = action != null && !action.trim().isEmpty();
+
+        if (hasUsername && hasAction) {
+            return auditLogRepository.findByUsernameContainingIgnoreCaseAndActionContainingIgnoreCase(username.trim(), action.trim(), pageable);
+        } else if (hasUsername) {
+            return auditLogRepository.findByUsernameContainingIgnoreCase(username.trim(), pageable);
+        } else if (hasAction) {
+            return auditLogRepository.findByActionContainingIgnoreCase(action.trim(), pageable);
+        } else {
+            return auditLogRepository.findAll(pageable);
+        }
     }
 
     private String extractClientIp(HttpServletRequest request) {

@@ -13,8 +13,9 @@ import java.util.UUID;
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, UUID> {
 
-    @Query("SELECT a FROM AuditLog a WHERE " +
-           "(:username IS NULL OR LOWER(a.username) LIKE LOWER(CONCAT('%', :username, '%'))) AND " +
-           "(:action IS NULL OR LOWER(a.action) LIKE LOWER(CONCAT('%', :action, '%')))")
-    Page<AuditLog> searchLogs(@Param("username") String username, @Param("action") String action, Pageable pageable);
+    Page<AuditLog> findByUsernameContainingIgnoreCase(String username, Pageable pageable);
+
+    Page<AuditLog> findByActionContainingIgnoreCase(String action, Pageable pageable);
+
+    Page<AuditLog> findByUsernameContainingIgnoreCaseAndActionContainingIgnoreCase(String username, String action, Pageable pageable);
 }

@@ -72,7 +72,9 @@ public class MySqlBackupEngine implements DatabaseBackupEngine {
     @Override
     public BackupResult executeBackup(DatabaseBackupRequest request, File targetFile) {
         List<String> cmd = buildCommandList(request);
-        processSanitizer.validateExecutable(cmd.get(0));
+        String executable = resolveExecutable(cmd.get(0));
+        processSanitizer.validateExecutable(executable);
+        cmd.set(0, executable);
 
         Map<String, String> env = new HashMap<>();
         if (request.getPassword() != null && !request.getPassword().isEmpty()) {
@@ -174,6 +176,16 @@ public class MySqlBackupEngine implements DatabaseBackupEngine {
             log.error("MySQL dump execution error: {}", e.getMessage());
             throw new RuntimeException("MySQL backup failed: " + e.getMessage(), e);
         }
+    }
+
+    private String resolveExecutable(String executable) {
+        if ("mysqldump".equalsIgnoreCase(executable)) {
+            // Check if mariadb-dump is installed (e.g. Alpine Linux) to avoid deprecation warnings
+            if (new File("/usr/bin/mariadb-dump").exists()) {
+                return "mariadb-dump";
+            }
+        }
+        return executable;
     }
 
     private void deleteFileQuietly(File file) {

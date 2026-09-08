@@ -21,16 +21,19 @@ FROM eclipse-temurin:21-jre-alpine AS runtime
 LABEL maintainer="Custos Platform Team <ops@custos.io>"
 LABEL description="Custos Server Automation & Pipeline Orchestration Platform"
 
-# Install required client binaries and utility tools
+# Install required client binaries and utility tools (including MariaDB Connector/C plugins for MySQL 8 caching_sha2_password)
 RUN apk update && apk add --no-cache \
     curl \
     bash \
     postgresql16-client \
     mariadb-client \
+    mariadb-connector-c \
     tar \
     gzip \
     zstd \
     tzdata && \
+    mkdir -p /etc/my.cnf.d && \
+    printf '[client-mariadb]\nssl-verify-server-cert=0\n' > /etc/my.cnf.d/ssl.cnf && \
     rm -rf /var/cache/apk/*
 
 # Setup system user and group (Non-root UID/GID: 10001)
