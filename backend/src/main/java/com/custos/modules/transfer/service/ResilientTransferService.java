@@ -217,6 +217,10 @@ public class ResilientTransferService {
             CredentialVault vault = credentialVaultRepository.findById(request.getCredentialId())
                     .orElseThrow(() -> new ResourceNotFoundException("Credential profile not found: " + request.getCredentialId()));
 
+            if (vault.getHost() == null || vault.getHost().trim().isEmpty()) {
+                throw new com.custos.shared.BadRequestException("Credential Profile '" + vault.getName() + "' ไม่มีข้อมูล Host / IP Address");
+            }
+
             DecryptedSecretPayload secret = credentialService.getDecryptedSecret(vault.getId());
             String password = secret != null ? secret.getPassword() : null;
             String privateKey = secret != null ? secret.getSshPrivateKey() : null;
@@ -250,7 +254,11 @@ public class ResilientTransferService {
             }
         }
 
-        // Direct parameters fallback
+        // Direct parameters fallback: host is strictly required
+        if (request.getHost() == null || request.getHost().trim().isEmpty()) {
+            throw new com.custos.shared.BadRequestException("กรุณาระบุ Credential Profile จาก Vault หรือระบุ Host/IP ปลายทางสำหรับการโอนถ่ายไฟล์");
+        }
+
         if ("FTP".equalsIgnoreCase(request.getProtocol()) || "FTPS".equalsIgnoreCase(request.getProtocol())) {
             boolean isFtps = "FTPS".equalsIgnoreCase(request.getProtocol())
                     || Boolean.TRUE.equals(request.getIsFtps())

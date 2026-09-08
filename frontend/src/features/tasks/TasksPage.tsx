@@ -140,7 +140,7 @@ export const TasksPage: React.FC = () => {
   ) || [];
 
   const transferCredentials = credentials?.filter(
-    (c) => c.credentialType === 'SFTP' || c.credentialType === 'FTP'
+    (c) => c.credentialType === 'SFTP' || c.credentialType === 'FTP' || c.credentialType === 'FTPS'
   ) || [];
 
   const handleCredentialSelect = (credId: string) => {
@@ -230,11 +230,14 @@ export const TasksPage: React.FC = () => {
   // Resilient Transfer Mutation
   const transferMutation = useMutation({
     mutationFn: async () => {
+      if (!transferCredentialId) {
+        throw new Error('กรุณาเลือก SFTP / FTP Credential จาก Vault ก่อนเริ่มส่งไฟล์');
+      }
       setTransferError(null);
       setTransferResult(null);
       return await transferApi.uploadFile({
         sourceFilePath: transferSourceFile.trim(),
-        credentialId: transferCredentialId || undefined,
+        credentialId: transferCredentialId,
         remoteDirectory: remoteUploadDir.trim(),
         chunkSizeBytes: chunkSizeMb * 1024 * 1024,
         maxRetriesPerChunk: Number(maxRetries),
@@ -771,21 +774,34 @@ export const TasksPage: React.FC = () => {
 
                 {/* Target Transfer Vault Profile */}
                 <div className="space-y-1.5 pt-2 border-t border-border">
-                  <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
-                    <Server className="w-3.5 h-3.5 text-primary" /> เลือกปลายทาง SFTP / FTP จาก Vault
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+                      <Server className="w-3.5 h-3.5 text-primary" /> เลือกปลายทาง SFTP / FTP จาก Vault <span className="text-destructive">*</span>
+                    </label>
+                    <a
+                      href="/vault"
+                      className="text-xs text-primary hover:underline"
+                    >
+                      + จัดการ Vault Profile
+                    </a>
+                  </div>
                   <select
                     value={transferCredentialId}
                     onChange={(e) => setTransferCredentialId(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="">-- เลือก Credential SFTP/FTP (หรือเว้นว่างเพื่อตัดแบ่งอย่างเดียว) --</option>
+                    <option value="">-- กรุณาเลือก Credential SFTP/FTP/FTPS จาก Vault --</option>
                     {transferCredentials.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.credentialType}) - {c.host}:{c.port}
                       </option>
                     ))}
                   </select>
+                  {!transferCredentialId && (
+                    <p className="text-[11px] text-amber-400">
+                      * จำเป็นต้องเลือก Credential ปลายทางก่อนเริ่มกระบวนการส่งไฟล์ (หากยังไม่มี สามารถสร้างได้ที่หน้า Credentials Vault)
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -812,7 +828,7 @@ export const TasksPage: React.FC = () => {
 
                   <Button
                     onClick={() => transferMutation.mutate()}
-                    disabled={!transferSourceFile.trim() || transferMutation.isPending}
+                    disabled={!transferSourceFile.trim() || !transferCredentialId || transferMutation.isPending}
                     className="gap-2"
                   >
                     {transferMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
