@@ -90,13 +90,25 @@ public class SftpTransferClient implements RemoteTransferClient {
             connect();
         }
 
-        if (remoteDirectory != null && !remoteDirectory.trim().isEmpty()) {
-            ensureRemoteDirectoryExists(remoteDirectory);
-            channelSftp.cd(remoteDirectory);
-        }
+        String initialWorkingDir = null;
+        try {
+            initialWorkingDir = channelSftp.pwd();
+        } catch (Exception ignored) {}
 
-        try (InputStream in = new BufferedInputStream(new FileInputStream(localFile), 65536)) {
-            channelSftp.put(in, remoteFileName, ChannelSftp.OVERWRITE);
+        try {
+            if (remoteDirectory != null && !remoteDirectory.trim().isEmpty()) {
+                ensureRemoteDirectoryExists(remoteDirectory);
+            }
+
+            try (InputStream in = new BufferedInputStream(new FileInputStream(localFile), 65536)) {
+                channelSftp.put(in, remoteFileName, ChannelSftp.OVERWRITE);
+            }
+        } finally {
+            if (initialWorkingDir != null) {
+                try {
+                    channelSftp.cd(initialWorkingDir);
+                } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -135,18 +147,25 @@ public class SftpTransferClient implements RemoteTransferClient {
     }
 
     private void ensureRemoteDirectoryExists(String path) {
-        String[] folders = path.split("[/\\\\]");
-        for (String folder : folders) {
-            if (!folder.isEmpty()) {
-                try {
-                    channelSftp.cd(folder);
-                } catch (SftpException e) {
+        try {
+            if (path.startsWith("/") || path.startsWith("\\")) {
+                channelSftp.cd("/");
+            }
+            String[] folders = path.split("[/\\\\]");
+            for (String folder : folders) {
+                if (!folder.isEmpty()) {
                     try {
-                        channelSftp.mkdir(folder);
                         channelSftp.cd(folder);
-                    } catch (Exception ignored) {}
+                    } catch (SftpException e) {
+                        try {
+                            channelSftp.mkdir(folder);
+                            channelSftp.cd(folder);
+                        } catch (Exception ignored) {}
+                    }
                 }
             }
+        } catch (Exception e) {
+            log.warn("Could not ensure SFTP directory exists for {}: {}", path, e.getMessage());
         }
     }
 }

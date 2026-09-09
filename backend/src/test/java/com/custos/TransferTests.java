@@ -9,6 +9,7 @@ import com.custos.modules.transfer.model.TransferManifest;
 import com.custos.modules.transfer.service.ChecksumService;
 import com.custos.modules.transfer.service.StoragePrecheckService;
 import com.custos.modules.transfer.client.FtpTransferClient;
+import com.custos.modules.transfer.client.SftpTransferClient;
 import com.custos.modules.transfer.dto.TransferRequest;
 import com.custos.modules.transfer.service.ResilientTransferService;
 import com.custos.modules.vault.entity.CredentialType;
@@ -338,5 +339,23 @@ class TransferTests {
                 .build();
         RemoteTransferClient resolved2 = (RemoteTransferClient) method.invoke(resilientTransferService, req2);
         assertTrue(((FtpTransferClient) resolved2).isFtps(), "Protocol FTP with EXPLICIT_TLS must resolve with isFtps = true");
+    }
+
+    @Test
+    @DisplayName("TASK-505: ทดสอบ SftpTransferClient เชื่อมต่อและอัปโหลดไฟล์ไปยัง SFTP Server")
+    void testLiveSftpUpload(@TempDir Path tempDir) throws Exception {
+        SftpTransferClient client = new SftpTransferClient("127.0.0.1", 2222, "sftpuser", "sftppassword", null, null);
+        client.connect();
+        assertTrue(client.isConnected());
+
+        Path testFile = tempDir.resolve("test_sftp_payload.tar.gz");
+        Files.writeString(testFile, "SFTP resilient sequential chunk payload verification");
+
+        client.uploadFile(testFile.toFile(), "upload", "test_sftp_payload.tar.gz");
+        assertTrue(client.remoteFileExists("upload", "test_sftp_payload.tar.gz"));
+        assertEquals(testFile.toFile().length(), client.getRemoteFileSize("upload", "test_sftp_payload.tar.gz"));
+
+        client.disconnect();
+        assertFalse(client.isConnected());
     }
 }
