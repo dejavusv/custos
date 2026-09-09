@@ -151,6 +151,17 @@ export const TasksPage: React.FC = () => {
     }
   };
 
+  const formatErrorMessage = (err: any, fallback: string) => {
+    if (err.response?.data?.message) {
+      return err.response.data.message;
+    }
+    if (err.response?.status === 404) {
+      const endpoint = err.config?.url || err.response?.data?.path || '';
+      return `ไม่พบ API Endpoint (${endpoint}) บน Backend (HTTP 404 Not Found) กรุณาตรวจสอบว่า Backend ของ Custos (พอร์ต 8080) กำลังรันอยู่และเชื่อมต่อถูกต้อง`;
+    }
+    return err.message || fallback;
+  };
+
   // DB Backup Mutation
   const dbBackupMutation = useMutation({
     mutationFn: async () => {
@@ -166,7 +177,7 @@ export const TasksPage: React.FC = () => {
       });
     },
     onSuccess: (data) => setDbResult(data),
-    onError: (err: any) => setDbError(err.response?.data?.message || err.message || 'Database backup failed'),
+    onError: (err: any) => setDbError(formatErrorMessage(err, 'Database backup failed')),
   });
 
   // File Backup Mutation
@@ -183,7 +194,7 @@ export const TasksPage: React.FC = () => {
       });
     },
     onSuccess: (data) => setFileResult(data),
-    onError: (err: any) => setFileError(err.response?.data?.message || err.message || 'File backup failed'),
+    onError: (err: any) => setFileError(formatErrorMessage(err, 'File backup failed')),
   });
 
   // Retention Cleanup Mutation
@@ -198,7 +209,7 @@ export const TasksPage: React.FC = () => {
       });
     },
     onSuccess: (data) => setCleanupResult(data),
-    onError: (err: any) => setCleanupError(err.response?.data?.message || err.message || 'Retention cleanup failed'),
+    onError: (err: any) => setCleanupError(formatErrorMessage(err, 'Retention cleanup failed')),
   });
 
   // Pre-check Mutation
@@ -211,7 +222,7 @@ export const TasksPage: React.FC = () => {
       });
     },
     onSuccess: (data) => setPrecheckResult(data),
-    onError: (err: any) => setTransferError(err.response?.data?.message || err.message || 'Pre-check failed'),
+    onError: (err: any) => setTransferError(formatErrorMessage(err, 'Pre-check failed')),
   });
 
   // Split File Mutation
@@ -224,7 +235,7 @@ export const TasksPage: React.FC = () => {
       });
     },
     onSuccess: (data) => setSplitManifest(data),
-    onError: (err: any) => setTransferError(err.response?.data?.message || err.message || 'File split failed'),
+    onError: (err: any) => setTransferError(formatErrorMessage(err, 'File split failed')),
   });
 
   // Resilient Transfer Mutation
@@ -245,7 +256,7 @@ export const TasksPage: React.FC = () => {
       });
     },
     onSuccess: (data) => setTransferResult(data),
-    onError: (err: any) => setTransferError(err.response?.data?.message || err.message || 'Transfer failed'),
+    onError: (err: any) => setTransferError(formatErrorMessage(err, 'Transfer failed')),
   });
 
   const handleCopy = (text: string, key: string) => {

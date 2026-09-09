@@ -110,15 +110,28 @@ public class FtpTransferClient implements RemoteTransferClient {
             connect();
         }
 
-        if (remoteDirectory != null && !remoteDirectory.trim().isEmpty()) {
-            ensureRemoteDirectoryExists(remoteDirectory);
-            ftpClient.changeWorkingDirectory(remoteDirectory);
-        }
+        String initialWorkingDir = null;
+        try {
+            initialWorkingDir = ftpClient.printWorkingDirectory();
+        } catch (Exception ignored) {}
 
-        try (InputStream in = new BufferedInputStream(new FileInputStream(localFile), 65536)) {
-            boolean done = ftpClient.storeFile(remoteFileName, in);
-            if (!done) {
-                throw new RuntimeException("FTP upload failed for " + remoteFileName + " (Reply: " + ftpClient.getReplyString() + ")");
+        try {
+            if (remoteDirectory != null && !remoteDirectory.trim().isEmpty()) {
+                ensureRemoteDirectoryExists(remoteDirectory);
+                ftpClient.changeWorkingDirectory(remoteDirectory);
+            }
+
+            try (InputStream in = new BufferedInputStream(new FileInputStream(localFile), 65536)) {
+                boolean done = ftpClient.storeFile(remoteFileName, in);
+                if (!done) {
+                    throw new RuntimeException("FTP upload failed for " + remoteFileName + " (Reply: " + ftpClient.getReplyString() + ")");
+                }
+            }
+        } finally {
+            if (initialWorkingDir != null) {
+                try {
+                    ftpClient.changeWorkingDirectory(initialWorkingDir);
+                } catch (Exception ignored) {}
             }
         }
     }
@@ -148,6 +161,9 @@ public class FtpTransferClient implements RemoteTransferClient {
 
     private void ensureRemoteDirectoryExists(String path) {
         try {
+            if (path.startsWith("/") || path.startsWith("\\")) {
+                ftpClient.changeWorkingDirectory("/");
+            }
             String[] dirs = path.split("[/\\\\]");
             for (String dir : dirs) {
                 if (!dir.isEmpty()) {

@@ -65,13 +65,9 @@ public class ResilientTransferService {
         TransferManifest manifest;
 
         try {
-            // If file size is greater than chunk size, split it; otherwise single chunk
-            if (sourceFile.length() > chunkSize) {
-                tempSplitDir = Files.createTempDirectory("custos-split-").toFile();
-                manifest = chunkSplitterEngine.splitFile(sourceFile, tempSplitDir, chunkSize);
-            } else {
-                manifest = chunkSplitterEngine.splitFile(sourceFile, sourceFile.getParentFile(), sourceFile.length() + 1024);
-            }
+            // Always use an isolated temp directory for chunks so cleanup in finally is guaranteed
+            tempSplitDir = Files.createTempDirectory("custos-split-").toFile();
+            manifest = chunkSplitterEngine.splitFile(sourceFile, tempSplitDir, chunkSize);
 
             // Resolve target client
             RemoteTransferClient client = resolveTransferClient(request);
