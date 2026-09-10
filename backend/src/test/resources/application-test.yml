@@ -25,3 +25,6 @@ custos:
     lockout-duration-minutes: 15
   vault:
     master-key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  gcp:
+    enabled: false
+    service-account-path: classpath:credentials/service-account.json

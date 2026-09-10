@@ -18,10 +18,12 @@ import {
   Layers,
   FileCheck,
   FolderOpen,
+  UploadCloud,
 } from 'lucide-react';
 import { vaultApi } from '../../services/vaultApi';
 import { backupApi } from '../../services/backupApi';
 import { transferApi } from '../../services/transferApi';
+import { DriveUploadSection } from './components/DriveUploadSection';
 import {
   BackupResult,
   CompressionFormat,
@@ -38,7 +40,7 @@ import { Input } from '../../components/ui/Input';
 import { StorageBrowserDialog } from '../../components/storage/StorageBrowserDialog';
 
 export const TasksPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'database' | 'filesystem' | 'retention' | 'transfer'>('database');
+  const [activeTab, setActiveTab] = useState<'database' | 'filesystem' | 'retention' | 'transfer' | 'gdrive'>('database');
   const [copiedChecksum, setCopiedChecksum] = useState<string | null>(null);
 
   // Database Backup Form State
@@ -331,6 +333,17 @@ export const TasksPage: React.FC = () => {
         >
           <Trash2 className="w-4 h-4" />
           Retention Policy Cleanup
+        </button>
+        <button
+          onClick={() => setActiveTab('gdrive')}
+          className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-all ${
+            activeTab === 'gdrive'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <UploadCloud className="w-4 h-4 text-blue-400" />
+          Google Drive & Firebase
         </button>
       </div>
 
@@ -1142,6 +1155,11 @@ export const TasksPage: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Tab 5: Google Drive Upload & Firebase Firestore Audit */}
+      {activeTab === 'gdrive' && (
+        <DriveUploadSection />
       )}
 
       {/* Storage Browser Dialog */}

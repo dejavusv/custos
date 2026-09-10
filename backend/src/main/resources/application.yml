@@ -49,6 +49,14 @@ custos:
     lockout-duration-minutes: 15
   vault:
     master-key: ${CUSTOS_VAULT_MASTER_KEY:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+  gcp:
+    enabled: ${CUSTOS_GCP_ENABLED:true}
+    service-account-path: ${GCP_SERVICE_ACCOUNT_KEY_PATH:classpath:credentials/service-account.json}
+    drive:
+      default-folder-id: ${GOOGLE_DRIVE_DEFAULT_FOLDER_ID:}
+      application-name: ${GOOGLE_DRIVE_APP_NAME:Custos-Drive-Uploader}
+    firestore:
+      collection-name: ${FIRESTORE_COLLECTION_NAME:file_upload_history}
 
 management:
   endpoints:

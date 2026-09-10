@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/vault/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR")
                         .requestMatchers("/api/v1/backup/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR")
                         .requestMatchers("/api/v1/transfer/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR")
+                        .requestMatchers("/api/v1/drive/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR", "ROLE_VIEWER")
                         .requestMatchers("/api/v1/pipelines/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR", "ROLE_VIEWER")
                         .anyRequest().authenticated()
                 )
