@@ -37,7 +37,7 @@ public class FirestoreAuditService {
      */
     public FileUploadAuditRecord recordUploadLog(FileUploadAuditRecord record) throws ExecutionException, InterruptedException {
         if (firestoreClient == null) {
-            throw new IllegalStateException("Firestore client is not initialized. Please verify GCP credentials.");
+            throw new IllegalStateException("Firestore client is not initialized. ไม่พบไฟล์ Service Account Key JSON กรุณาวางไฟล์ 'service-account.json' ใน 'backend/src/main/resources/credentials/' หรือตั้งค่า Environment Variable 'GCP_SERVICE_ACCOUNT_KEY_PATH'");
         }
 
         String collectionName = googleCloudConfig.getCollectionName();

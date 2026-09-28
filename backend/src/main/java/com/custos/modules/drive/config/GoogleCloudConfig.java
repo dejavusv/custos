@@ -16,7 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -27,11 +30,17 @@ import java.util.Collections;
 @Getter
 public class GoogleCloudConfig {
 
+    private final ResourceLoader resourceLoader;
+
+    public GoogleCloudConfig(ResourceLoader resourceLoader) {
+        this.resourceLoader = resourceLoader;
+    }
+
     @Value("${custos.gcp.enabled:true}")
     private boolean enabled;
 
     @Value("${custos.gcp.service-account-path:classpath:credentials/service-account.json}")
-    private Resource serviceAccountResource;
+    private String serviceAccountPath;
 
     @Value("${custos.gcp.drive.default-folder-id:}")
     private String defaultFolderId;
@@ -42,6 +51,36 @@ public class GoogleCloudConfig {
     @Value("${custos.gcp.firestore.collection-name:file_upload_history}")
     private String collectionName;
 
+    public InputStream getCredentialsInputStream() throws IOException {
+        if (!enabled || serviceAccountPath == null || serviceAccountPath.trim().isEmpty()) {
+            return null;
+        }
+
+        String path = serviceAccountPath.trim();
+
+        // 1. If explicit classpath: or file: prefix
+        if (path.startsWith("classpath:") || path.startsWith("file:")) {
+            Resource res = resourceLoader.getResource(path);
+            if (res.exists()) {
+                return res.getInputStream();
+            }
+        }
+
+        // 2. Direct filesystem check
+        File directFile = new File(path);
+        if (directFile.exists() && directFile.isFile()) {
+            return new FileInputStream(directFile);
+        }
+
+        // 3. Fallback classpath resolution
+        Resource classPathRes = resourceLoader.getResource("classpath:" + path);
+        if (classPathRes.exists()) {
+            return classPathRes.getInputStream();
+        }
+
+        return null;
+    }
+
     @Bean
     public Drive googleDriveClient() {
         if (!enabled) {
@@ -50,12 +89,13 @@ public class GoogleCloudConfig {
         }
 
         try {
-            if (serviceAccountResource == null || !serviceAccountResource.exists()) {
-                log.warn("GCP Service Account resource not found: {}. Google Drive client will be null.", serviceAccountResource);
+            InputStream in = getCredentialsInputStream();
+            if (in == null) {
+                log.warn("GCP Service Account credentials not found at: {}. Google Drive client will be null.", serviceAccountPath);
                 return null;
             }
 
-            try (InputStream in = serviceAccountResource.getInputStream()) {
+            try (in) {
                 GoogleCredentials credentials = GoogleCredentials.fromStream(in)
                         .createScoped(Collections.singleton(DriveScopes.DRIVE_FILE));
 
@@ -81,13 +121,14 @@ public class GoogleCloudConfig {
         }
 
         try {
-            if (serviceAccountResource == null || !serviceAccountResource.exists()) {
-                log.warn("GCP Service Account resource not found: {}. Firestore client will be null.", serviceAccountResource);
+            InputStream in = getCredentialsInputStream();
+            if (in == null) {
+                log.warn("GCP Service Account credentials not found at: {}. Firestore client will be null.", serviceAccountPath);
                 return null;
             }
 
             if (FirebaseApp.getApps().isEmpty()) {
-                try (InputStream in = serviceAccountResource.getInputStream()) {
+                try (in) {
                     FirebaseOptions options = FirebaseOptions.builder()
                             .setCredentials(GoogleCredentials.fromStream(in))
                             .build();

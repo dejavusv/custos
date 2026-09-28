@@ -35,7 +35,7 @@ public class GoogleDriveService {
      */
     public File uploadFile(InputStream inputStream, long size, String fileName, String mimeType, String folderId) throws IOException {
         if (googleDriveClient == null) {
-            throw new IllegalStateException("Google Drive client is not initialized. Please verify GCP credentials.");
+            throw new IllegalStateException("Google Drive client is not initialized. ไม่พบไฟล์ Service Account Key JSON กรุณาวางไฟล์ 'service-account.json' ใน 'backend/src/main/resources/credentials/' หรือตั้งค่า Environment Variable 'GCP_SERVICE_ACCOUNT_KEY_PATH'");
         }
 
         String targetFolder = (folderId != null && !folderId.trim().isEmpty())

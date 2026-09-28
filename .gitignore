@@ -27,6 +27,9 @@ docker/.env.dev
 id_rsa
 id_ed25519
 known_hosts
+credentials/
+*service-account*.json
+!service-account.json.example
 
 # ------------------------------------------------------------------------------
 # 2. Backend (Java 21 / Spring Boot 3.3 / Maven)
