@@ -55,6 +55,11 @@ custos:
     drive:
       default-folder-id: ${GOOGLE_DRIVE_DEFAULT_FOLDER_ID:}
       application-name: ${GOOGLE_DRIVE_APP_NAME:Custos-Drive-Uploader}
+      # ถ้ากำหนดครบทั้ง 3 ค่า Drive จะใช้ OAuth ของผู้ใช้แทน Service Account (Firestore ยังใช้ Service Account)
+      oauth:
+        client-id: ${GOOGLE_DRIVE_OAUTH_CLIENT_ID:}
+        client-secret: ${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET:}
+        refresh-token: ${GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN:}
     firestore:
       collection-name: ${FIRESTORE_COLLECTION_NAME:file_upload_history}
 

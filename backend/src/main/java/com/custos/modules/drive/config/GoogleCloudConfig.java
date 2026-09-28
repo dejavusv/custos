@@ -6,6 +6,7 @@ import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.DriveScopes;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.auth.oauth2.UserCredentials;
 import com.google.cloud.firestore.Firestore;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
@@ -17,6 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -50,6 +52,23 @@ public class GoogleCloudConfig {
 
     @Value("${custos.gcp.firestore.collection-name:file_upload_history}")
     private String collectionName;
+
+    // OAuth ของผู้ใช้จริง (แทน Service Account) — ไฟล์จะใช้โควตาพื้นที่ของบัญชีผู้ใช้
+    // จำเป็นสำหรับบัญชี Gmail ส่วนตัว เพราะ Service Account ไม่มี storage quota
+    @Value("${custos.gcp.drive.oauth.client-id:}")
+    private String oauthClientId;
+
+    @Value("${custos.gcp.drive.oauth.client-secret:}")
+    private String oauthClientSecret;
+
+    @Value("${custos.gcp.drive.oauth.refresh-token:}")
+    private String oauthRefreshToken;
+
+    public boolean isOAuthConfigured() {
+        return StringUtils.hasText(oauthClientId)
+                && StringUtils.hasText(oauthClientSecret)
+                && StringUtils.hasText(oauthRefreshToken);
+    }
 
     public InputStream getCredentialsInputStream() throws IOException {
         if (!enabled || serviceAccountPath == null || serviceAccountPath.trim().isEmpty()) {
@@ -89,24 +108,35 @@ public class GoogleCloudConfig {
         }
 
         try {
-            InputStream in = getCredentialsInputStream();
-            if (in == null) {
-                log.warn("GCP Service Account credentials not found at: {}. Google Drive client will be null.", serviceAccountPath);
-                return null;
-            }
-
-            try (in) {
-                GoogleCredentials credentials = GoogleCredentials.fromStream(in)
-                        .createScoped(Collections.singleton(DriveScopes.DRIVE_FILE));
-
-                log.info("Initializing Google Drive client with application name: {}", applicationName);
-                return new Drive.Builder(
-                        GoogleNetHttpTransport.newTrustedTransport(),
-                        GsonFactory.getDefaultInstance(),
-                        new HttpCredentialsAdapter(credentials))
-                        .setApplicationName(applicationName)
+            GoogleCredentials credentials;
+            if (isOAuthConfigured()) {
+                // Scope ถูกกำหนดตอนขอ Refresh Token แล้ว จึงไม่ต้อง createScoped
+                credentials = UserCredentials.newBuilder()
+                        .setClientId(oauthClientId.trim())
+                        .setClientSecret(oauthClientSecret.trim())
+                        .setRefreshToken(oauthRefreshToken.trim())
                         .build();
+                log.info("Initializing Google Drive client with OAuth user credentials");
+            } else {
+                InputStream in = getCredentialsInputStream();
+                if (in == null) {
+                    log.warn("GCP Service Account credentials not found at: {}. Google Drive client will be null.", serviceAccountPath);
+                    return null;
+                }
+                try (in) {
+                    credentials = GoogleCredentials.fromStream(in)
+                            .createScoped(Collections.singleton(DriveScopes.DRIVE_FILE));
+                }
+                log.info("Initializing Google Drive client with Service Account (uploads require a Shared Drive folder)");
             }
+
+            log.info("Google Drive client application name: {}", applicationName);
+            return new Drive.Builder(
+                    GoogleNetHttpTransport.newTrustedTransport(),
+                    GsonFactory.getDefaultInstance(),
+                    new HttpCredentialsAdapter(credentials))
+                    .setApplicationName(applicationName)
+                    .build();
         } catch (IOException | GeneralSecurityException e) {
             log.error("Failed to initialize Google Drive Client: {}", e.getMessage(), e);
             return null;

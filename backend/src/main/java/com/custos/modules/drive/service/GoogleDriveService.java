@@ -55,6 +55,7 @@ public class GoogleDriveService {
 
         return googleDriveClient.files()
                 .create(fileMetadata, mediaContent)
+                .setSupportsAllDrives(true)
                 .setFields("id, name, mimeType, size, webViewLink, webContentLink, parents")
                 .execute();
     }
@@ -70,7 +71,7 @@ public class GoogleDriveService {
 
         try {
             log.warn("Executing rollback: deleting Google Drive file with ID: {}", fileId);
-            googleDriveClient.files().delete(fileId).execute();
+            googleDriveClient.files().delete(fileId).setSupportsAllDrives(true).execute();
             log.info("Successfully deleted Google Drive file ID: {}", fileId);
             return true;
         } catch (Exception e) {
