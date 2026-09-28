@@ -25,6 +25,7 @@ import {
   Clock,
   CheckCircle2,
   AlertTriangle,
+  HardDriveUpload,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
@@ -32,6 +33,7 @@ import { DatabaseBackupNode } from './nodes/DatabaseBackupNode';
 import { FileBackupNode } from './nodes/FileBackupNode';
 import { TransferNode } from './nodes/TransferNode';
 import { NotificationNode } from './nodes/NotificationNode';
+import { GoogleDriveNode } from './nodes/GoogleDriveNode';
 import { NodeConfigModal } from './NodeConfigModal';
 import {
   MisfirePolicy,
@@ -53,6 +55,7 @@ const nodeTypes = {
   FILE_BACKUP: FileBackupNode,
   SPLIT_TRANSFER: TransferNode,
   EMAIL_ALERT: NotificationNode,
+  GOOGLE_DRIVE_UPLOAD: GoogleDriveNode,
 };
 
 export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
@@ -192,12 +195,23 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Attach onEdit listeners to nodes
+  // ลบ Node พร้อมเส้นเชื่อมทั้งหมดที่เข้า/ออกจาก Node นั้น (มีผลเมื่อกด Save Pipeline)
+  const handleDeleteNode = useCallback(
+    (nodeId: string, nodeLabel: string) => {
+      if (!window.confirm(`Delete step "${nodeLabel}"?\n\nChanges take effect after you click Save Pipeline.`)) return;
+      setNodes((nds) => nds.filter((n) => n.id !== nodeId));
+      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    },
+    [setNodes, setEdges]
+  );
+
+  // Attach onEdit / onDelete listeners to nodes
   const nodesWithHandlers = useMemo(() => {
     return nodes.map((n) => ({
       ...n,
       data: {
         ...n.data,
+        onDelete: () => handleDeleteNode(n.id, (n.data.label as string) || n.id),
         onEdit: () => {
           setEditingNode({
             id: n.id,
@@ -209,7 +223,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
         },
       },
     }));
-  }, [nodes]);
+  }, [nodes, handleDeleteNode]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -237,12 +251,16 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
   );
 
   const addStepNode = (type: TaskType) => {
-    const key = `step_${Date.now().toString().slice(-4)}`;
+    const usedKeys = new Set(nodes.map((n) => n.data.nodeKey as string));
+    let seq = nodes.length + 1;
+    while (usedKeys.has(`step_${seq}`)) seq++;
+    const key = `step_${seq}`;
     const labelMap: Record<TaskType, string> = {
       DATABASE_BACKUP: 'Database Dump',
       FILE_BACKUP: 'Directory Archive',
       SPLIT_TRANSFER: 'Split & SFTP Upload',
       EMAIL_ALERT: 'SES Notification',
+      GOOGLE_DRIVE_UPLOAD: 'Google Drive Upload',
     };
 
     const defaultDataMap: Record<TaskType, Record<string, any>> = {
@@ -266,6 +284,11 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       EMAIL_ALERT: {
         recipient: 'devops@company.com',
         subject: 'Custos Pipeline Report: ${last_output_path}',
+      },
+      GOOGLE_DRIVE_UPLOAD: {
+        sourceFilePath: '${last_output_path}',
+        folderId: '',
+        systemSource: 'CUSTOS_PIPELINE',
       },
     };
 
@@ -312,6 +335,15 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       setIsSaving(true);
       setStatusMessage(null);
 
+      // เส้นเชื่อมส่งเป็น nodeKey เพราะ Node ใหม่ยังไม่มี UUID (Backend จะแปลงเป็น ID ให้หลังบันทึก)
+      const nodeKeys = nodes.map((node, index) => (node.data.nodeKey as string) || `step_${index + 1}`);
+      const duplicateKey = nodeKeys.find((key, index) => nodeKeys.indexOf(key) !== index);
+      if (duplicateKey) {
+        setStatusMessage({ text: `Error: Duplicate node key "${duplicateKey}"`, type: 'error' });
+        return;
+      }
+      const keyByNodeId = new Map(nodes.map((node, index) => [node.id, nodeKeys[index]]));
+
       // Map nodes and edges into StepNodeDto[]
       const stepDtos: StepNodeDto[] = nodes.map((node, index) => {
         // Find outgoing edges
@@ -325,18 +357,19 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
         // Extract pure config without internal callbacks
         const dataCopy = { ...node.data };
         delete dataCopy.onEdit;
+        delete dataCopy.onDelete;
 
         return {
           id: node.id.includes('-') && node.id.length === 36 ? node.id : undefined,
-          nodeKey: (node.data.nodeKey as string) || `step_${index + 1}`,
+          nodeKey: nodeKeys[index],
           nodeLabel: (node.data.label as string) || `Step ${index + 1}`,
           nodeType: (node.type as TaskType) || 'DATABASE_BACKUP',
           stepOrder: index + 1,
           positionX: node.position.x,
           positionY: node.position.y,
           configOverrideJson: JSON.stringify(dataCopy),
-          onSuccessNodeId: successEdge?.target,
-          onFailureNodeId: failureEdge?.target,
+          onSuccessNodeKey: successEdge ? keyByNodeId.get(successEdge.target) : undefined,
+          onFailureNodeKey: failureEdge ? keyByNodeId.get(failureEdge.target) : undefined,
         };
       });
 
@@ -534,6 +567,13 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           >
             <Mail className="w-3.5 h-3.5" />
             Email Alert
+          </button>
+          <button
+            onClick={() => addStepNode('GOOGLE_DRIVE_UPLOAD')}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20 transition-all font-medium"
+          >
+            <HardDriveUpload className="w-3.5 h-3.5" />
+            Google Drive
           </button>
         </div>
 

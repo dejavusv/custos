@@ -4,5 +4,6 @@ public enum TaskType {
     DATABASE_BACKUP,
     FILE_BACKUP,
     SPLIT_TRANSFER,
-    EMAIL_ALERT
+    EMAIL_ALERT,
+    GOOGLE_DRIVE_UPLOAD
 }

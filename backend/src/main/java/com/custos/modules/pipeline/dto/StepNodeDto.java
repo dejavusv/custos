@@ -31,4 +31,8 @@ public class StepNodeDto {
     private String configOverrideJson;
     private UUID onSuccessNodeId;
     private UUID onFailureNodeId;
+
+    // เส้นเชื่อมอ้างด้วย nodeKey (ใช้ได้ทั้ง Node ใหม่ที่ยังไม่มี ID) — มีลำดับความสำคัญเหนือ *NodeId
+    private String onSuccessNodeKey;
+    private String onFailureNodeKey;
 }

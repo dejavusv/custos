@@ -9,6 +9,7 @@ import com.custos.modules.pipeline.engine.ExecutionRegistry;
 import com.custos.modules.pipeline.entity.*;
 import com.custos.modules.pipeline.repository.*;
 import com.custos.modules.scheduling.service.QuartzSchedulerService;
+import com.custos.shared.BadRequestException;
 import com.custos.shared.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -69,44 +70,60 @@ public class PipelineService {
 
         pipeline = pipelineDefinitionRepository.save(pipeline);
 
-        // Delete previous nodes and replace
-        pipelineStepNodeRepository.deleteByPipelineId(pipeline.getId());
+        List<StepNodeDto> dtos = request.getNodes() != null ? request.getNodes() : List.of();
+        Set<String> seenKeys = new HashSet<>();
+        for (StepNodeDto dto : dtos) {
+            if (!seenKeys.add(dto.getNodeKey())) {
+                throw new BadRequestException("Duplicate node key in pipeline: " + dto.getNodeKey());
+            }
+        }
+
+        // Upsert: Node เดิมอัปเดตในที่ (คง ID ไว้ให้ประวัติการรันยังอ้างถึงได้), Node ใหม่ให้ DB สร้าง ID เอง
+        List<PipelineStepNode> existingNodes = pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(pipeline.getId());
+        Map<UUID, PipelineStepNode> existingById = new HashMap<>();
+        for (PipelineStepNode existing : existingNodes) {
+            existingById.put(existing.getId(), existing);
+        }
 
         List<PipelineStepNode> nodeEntities = new ArrayList<>();
         Map<String, PipelineStepNode> keyToNodeMap = new HashMap<>();
-
-        if (request.getNodes() != null) {
-            for (StepNodeDto dto : request.getNodes()) {
-                PipelineStepNode node = PipelineStepNode.builder()
-                        .pipeline(pipeline)
-                        .nodeKey(dto.getNodeKey())
-                        .nodeLabel(dto.getNodeLabel())
-                        .nodeType(dto.getNodeType())
-                        .stepOrder(dto.getStepOrder())
-                        .positionX(dto.getPositionX())
-                        .positionY(dto.getPositionY())
-                        .configOverrideJson(dto.getConfigOverrideJson() != null ? dto.getConfigOverrideJson() : "{}")
-                        .onSuccessNodeId(dto.getOnSuccessNodeId())
-                        .onFailureNodeId(dto.getOnFailureNodeId())
-                        .build();
-
-                if (dto.getTaskId() != null) {
-                    taskDefinitionRepository.findById(dto.getTaskId()).ifPresent(node::setTask);
-                }
-
-                // If DTO already has an ID, retain it so edge references match
-                if (dto.getId() != null) {
-                    node.setId(dto.getId());
-                }
-
-                node = pipelineStepNodeRepository.save(node);
-                nodeEntities.add(node);
-                keyToNodeMap.put(node.getNodeKey(), node);
+        for (StepNodeDto dto : dtos) {
+            PipelineStepNode node = dto.getId() != null ? existingById.remove(dto.getId()) : null;
+            if (node == null) {
+                node = PipelineStepNode.builder().pipeline(pipeline).build();
             }
+            node.setNodeKey(dto.getNodeKey());
+            node.setNodeLabel(dto.getNodeLabel());
+            node.setNodeType(dto.getNodeType());
+            node.setStepOrder(dto.getStepOrder());
+            node.setPositionX(dto.getPositionX());
+            node.setPositionY(dto.getPositionY());
+            node.setConfigOverrideJson(dto.getConfigOverrideJson() != null ? dto.getConfigOverrideJson() : "{}");
+            node.setTask(dto.getTaskId() != null ? taskDefinitionRepository.findById(dto.getTaskId()).orElse(null) : null);
+            // เส้นเชื่อมจะกำหนดในรอบที่สอง หลังทุก Node มี ID แล้ว (เลี่ยง FK on_success/on_failure_node_id)
+            node.setOnSuccessNodeId(null);
+            node.setOnFailureNodeId(null);
+
+            nodeEntities.add(node);
+            keyToNodeMap.put(node.getNodeKey(), node);
+        }
+
+        // Node ที่เหลือใน existingById คือ Node ที่ถูกลบออกจาก Builder
+        nodeEntities = pipelineStepNodeRepository.saveAllAndFlush(nodeEntities);
+        pipelineStepNodeRepository.deleteAll(existingById.values());
+        pipelineStepNodeRepository.flush();
+
+        Set<UUID> savedIds = nodeEntities.stream().map(PipelineStepNode::getId).collect(Collectors.toSet());
+        for (int i = 0; i < dtos.size(); i++) {
+            StepNodeDto dto = dtos.get(i);
+            PipelineStepNode node = nodeEntities.get(i);
+            node.setOnSuccessNodeId(resolveEdgeTarget(dto.getOnSuccessNodeKey(), dto.getOnSuccessNodeId(), keyToNodeMap, savedIds));
+            node.setOnFailureNodeId(resolveEdgeTarget(dto.getOnFailureNodeKey(), dto.getOnFailureNodeId(), keyToNodeMap, savedIds));
         }
 
         // Validate cycles
         dagCycleDetector.validateNodes(nodeEntities);
+        nodeEntities = pipelineStepNodeRepository.saveAll(nodeEntities);
 
         // Sync with Quartz
         try {
@@ -129,6 +146,18 @@ public class PipelineService {
         );
 
         return mapToDetailResponse(pipeline, nodeEntities);
+    }
+
+    private UUID resolveEdgeTarget(String targetKey, UUID targetId, Map<String, PipelineStepNode> keyToNodeMap, Set<UUID> savedIds) {
+        if (targetKey != null && !targetKey.isBlank()) {
+            PipelineStepNode target = keyToNodeMap.get(targetKey);
+            if (target == null) {
+                throw new BadRequestException("Edge points to unknown node key: " + targetKey);
+            }
+            return target.getId();
+        }
+        // รองรับ client เดิมที่ส่ง UUID มาตรงๆ — ยอมรับเฉพาะ ID ของ Node ที่อยู่ใน Pipeline นี้
+        return targetId != null && savedIds.contains(targetId) ? targetId : null;
     }
 
     @Transactional(readOnly = true)

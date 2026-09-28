@@ -1,6 +1,7 @@
 import React from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Database, Settings2 } from 'lucide-react';
+import { Database } from 'lucide-react';
+import { NodeHeaderActions } from './NodeHeaderActions';
 
 export interface DatabaseBackupNodeData {
   label: string;
@@ -8,6 +9,7 @@ export interface DatabaseBackupNodeData {
   databaseName?: string;
   host?: string;
   onEdit?: () => void;
+  onDelete?: () => void;
   [key: string]: unknown;
 }
 
@@ -43,15 +45,7 @@ export const DatabaseBackupNode: React.FC<NodeProps> = ({ data, selected }) => {
           </div>
         </div>
 
-        {nodeData.onEdit && (
-          <button
-            onClick={nodeData.onEdit}
-            className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors"
-            title="Configure Step"
-          >
-            <Settings2 className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <NodeHeaderActions onEdit={nodeData.onEdit} onDelete={nodeData.onDelete} />
       </div>
 
       <div className="space-y-1 pt-1 border-t border-slate-800/80 text-[11px]">

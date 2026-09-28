@@ -8,7 +8,13 @@ import com.custos.modules.pipeline.exception.CyclicDependencyException;
 import com.custos.modules.pipeline.repository.PipelineDefinitionRepository;
 import com.custos.modules.pipeline.repository.PipelineExecutionRepository;
 import com.custos.modules.pipeline.repository.PipelineStepNodeRepository;
+import com.custos.modules.pipeline.repository.StepExecutionLogRepository;
+import com.custos.modules.pipeline.dto.PipelineDetailResponse;
+import com.custos.modules.pipeline.dto.SavePipelineRequest;
+import com.custos.modules.pipeline.dto.StepNodeDto;
+import com.custos.modules.pipeline.service.PipelineService;
 import com.custos.modules.scheduling.service.QuartzSchedulerService;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +50,12 @@ public class PipelineAndSchedulerTests {
 
     @Autowired
     private PipelineExecutionRepository pipelineExecutionRepository;
+
+    @Autowired
+    private StepExecutionLogRepository stepExecutionLogRepository;
+
+    @Autowired
+    private PipelineService pipelineService;
 
     @Test
     @DisplayName("DAG Cycle Detection - Should detect circular loop and reject")
@@ -239,5 +251,99 @@ public class PipelineAndSchedulerTests {
         Assertions.assertNotNull(execution);
         // Step 1 failed, but routed to failureHandler which executed
         Assertions.assertNotNull(execution.getEndTime());
+    }
+
+    @Test
+    @DisplayName("DAG Pipeline Branching - On Failure node must NOT run when the step succeeds")
+    public void testFailureBranchSkippedOnSuccess(@TempDir Path tempDir) throws Exception {
+        File sourceDir = tempDir.resolve("src").toFile();
+        sourceDir.mkdirs();
+        try (FileWriter writer = new FileWriter(new File(sourceDir, "data.txt"))) {
+            writer.write("ok");
+        }
+        File destDir = tempDir.resolve("out").toFile();
+        destDir.mkdirs();
+
+        PipelineDefinition pipeline = pipelineDefinitionRepository.save(PipelineDefinition.builder()
+                .name("Failure Branch Skip Test " + UUID.randomUUID())
+                .isActive(true)
+                .build());
+
+        // ID ถูก generate ตอน save (การ setId ล่วงหน้าจะถูกแทนที่) จึงบันทึก Node ก่อนแล้วค่อยผูกเส้นด้วย ID จริง
+        PipelineStepNode backup = PipelineStepNode.builder()
+                .pipeline(pipeline)
+                .nodeKey("backup")
+                .nodeLabel("Backup")
+                .nodeType(TaskType.FILE_BACKUP)
+                .stepOrder(1)
+                .configOverrideJson(String.format("{\"sourcePath\":\"%s\",\"destinationDir\":\"%s\"}",
+                        sourceDir.getAbsolutePath().replace("\\", "\\\\"),
+                        destDir.getAbsolutePath().replace("\\", "\\\\")))
+                .build();
+
+        PipelineStepNode failureAlert = PipelineStepNode.builder()
+                .pipeline(pipeline)
+                .nodeKey("failureAlert")
+                .nodeLabel("Failure Alert")
+                .nodeType(TaskType.EMAIL_ALERT)
+                .stepOrder(2)
+                .configOverrideJson("{\"recipient\":\"alerts@example.com\"}")
+                .build();
+
+        backup = pipelineStepNodeRepository.save(backup);
+        failureAlert = pipelineStepNodeRepository.save(failureAlert);
+        backup.setOnFailureNodeId(failureAlert.getId());
+        pipelineStepNodeRepository.save(backup);
+
+        PipelineExecution execution = dagPipelineOrchestrator.executePipeline(pipeline.getId(), "TEST_RUNNER", TriggerType.MANUAL);
+
+        Assertions.assertEquals(ExecutionStatus.SUCCESS, execution.getStatus());
+        List<String> executedSteps = stepExecutionLogRepository.findByExecutionIdOrderByStartTimeAsc(execution.getId())
+                .stream().map(StepExecutionLog::getStepName).toList();
+        Assertions.assertEquals(List.of("Backup"), executedSteps, "Failure branch must not run after a successful step");
+    }
+
+    @Test
+    @DisplayName("Save Pipeline - Edges between brand-new nodes are resolved by nodeKey, and existing node IDs are kept on update")
+    public void testSavePipelineResolvesEdgesByNodeKey() {
+        StepNodeDto dump = StepNodeDto.builder().nodeKey("dump").nodeLabel("Dump").nodeType(TaskType.DATABASE_BACKUP)
+                .stepOrder(1).onSuccessNodeKey("upload").onFailureNodeKey("alert").build();
+        StepNodeDto upload = StepNodeDto.builder().nodeKey("upload").nodeLabel("Upload").nodeType(TaskType.SPLIT_TRANSFER)
+                .stepOrder(2).build();
+        StepNodeDto alert = StepNodeDto.builder().nodeKey("alert").nodeLabel("Alert").nodeType(TaskType.EMAIL_ALERT)
+                .stepOrder(3).build();
+
+        SavePipelineRequest create = new SavePipelineRequest();
+        create.setName("Key Edge Test " + UUID.randomUUID());
+        create.setNodes(new ArrayList<>(List.of(dump, upload, alert)));
+
+        PipelineDetailResponse created = pipelineService.savePipeline(create, null, new MockHttpServletRequest());
+        Map<String, StepNodeDto> byKey = new HashMap<>();
+        created.getNodes().forEach(n -> byKey.put(n.getNodeKey(), n));
+
+        Assertions.assertEquals(byKey.get("upload").getId(), byKey.get("dump").getOnSuccessNodeId());
+        Assertions.assertEquals(byKey.get("alert").getId(), byKey.get("dump").getOnFailureNodeId());
+
+        // Update: remove "alert", keep the others by ID
+        StepNodeDto dumpUpdate = StepNodeDto.builder().id(byKey.get("dump").getId()).nodeKey("dump").nodeLabel("Dump v2")
+                .nodeType(TaskType.DATABASE_BACKUP).stepOrder(1).onSuccessNodeKey("upload").build();
+        StepNodeDto uploadUpdate = StepNodeDto.builder().id(byKey.get("upload").getId()).nodeKey("upload").nodeLabel("Upload")
+                .nodeType(TaskType.SPLIT_TRANSFER).stepOrder(2).build();
+
+        SavePipelineRequest update = new SavePipelineRequest();
+        update.setId(created.getId());
+        update.setName(created.getName());
+        update.setNodes(new ArrayList<>(List.of(dumpUpdate, uploadUpdate)));
+
+        PipelineDetailResponse updated = pipelineService.savePipeline(update, null, new MockHttpServletRequest());
+        Map<String, StepNodeDto> updatedByKey = new HashMap<>();
+        updated.getNodes().forEach(n -> updatedByKey.put(n.getNodeKey(), n));
+
+        Assertions.assertEquals(2, updated.getNodes().size());
+        Assertions.assertEquals(byKey.get("dump").getId(), updatedByKey.get("dump").getId(), "Existing node ID must be kept");
+        Assertions.assertEquals("Dump v2", updatedByKey.get("dump").getNodeLabel());
+        Assertions.assertEquals(byKey.get("upload").getId(), updatedByKey.get("dump").getOnSuccessNodeId());
+        Assertions.assertNull(updatedByKey.get("dump").getOnFailureNodeId());
+        Assertions.assertEquals(2, pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(created.getId()).size());
     }
 }

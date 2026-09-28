@@ -11,6 +11,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 
 @Slf4j
@@ -43,17 +45,64 @@ public class DriveUploadFacadeService {
         }
 
         String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed_file";
-        String extension = getFileExtension(originalFilename);
         long fileSize = file.getSize();
         String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
         String username = currentUser != null ? currentUser.getUsername() : "anonymous";
+
+        return uploadStreamAndRecordAudit(file::getInputStream, originalFilename, fileSize, contentType,
+                systemSource, folderId, username);
+    }
+
+    /**
+     * Uploads a file that already exists on the server's disk (used by the GOOGLE_DRIVE_UPLOAD pipeline step).
+     */
+    public DriveUploadResponse uploadLocalFileAndRecordAudit(
+            Path localFile,
+            String systemSource,
+            String folderId,
+            String uploadedBy
+    ) throws IOException {
+        if (localFile == null || !Files.isRegularFile(localFile)) {
+            throw new IllegalArgumentException("Source file not found or is not a regular file: " + localFile);
+        }
+        if (systemSource == null || systemSource.trim().isEmpty()) {
+            throw new IllegalArgumentException("systemSource is required");
+        }
+
+        String contentType = Files.probeContentType(localFile);
+        return uploadStreamAndRecordAudit(
+                () -> Files.newInputStream(localFile),
+                localFile.getFileName().toString(),
+                Files.size(localFile),
+                contentType != null ? contentType : "application/octet-stream",
+                systemSource,
+                folderId,
+                uploadedBy != null ? uploadedBy : "SYSTEM"
+        );
+    }
+
+    @FunctionalInterface
+    private interface InputStreamSource {
+        InputStream open() throws IOException;
+    }
+
+    private DriveUploadResponse uploadStreamAndRecordAudit(
+            InputStreamSource source,
+            String originalFilename,
+            long fileSize,
+            String contentType,
+            String systemSource,
+            String folderId,
+            String username
+    ) throws IOException {
+        String extension = getFileExtension(originalFilename);
 
         log.info("Starting Google Drive upload for file '{}' ({} bytes) from system '{}' by user '{}'",
                 originalFilename, fileSize, systemSource, username);
 
         // Step 1: Upload to Google Drive via streaming
         File uploadedDriveFile;
-        try (InputStream inputStream = file.getInputStream()) {
+        try (InputStream inputStream = source.open()) {
             uploadedDriveFile = googleDriveService.uploadFile(
                     inputStream,
                     fileSize,

@@ -5,6 +5,9 @@ import com.custos.modules.backup.dto.FileBackupRequest;
 import com.custos.modules.backup.model.BackupResult;
 import com.custos.modules.backup.model.CompressionFormat;
 import com.custos.modules.backup.service.BackupService;
+import com.custos.modules.drive.dto.DriveUploadResponse;
+import com.custos.modules.drive.service.DriveUploadFacadeService;
+import com.custos.modules.execution.ProcessSanitizer;
 import com.custos.modules.pipeline.entity.*;
 import com.custos.modules.pipeline.repository.PipelineDefinitionRepository;
 import com.custos.modules.pipeline.repository.PipelineExecutionRepository;
@@ -44,6 +47,8 @@ public class DagPipelineOrchestrator {
     private final ObjectMapper objectMapper;
     private final com.custos.modules.console.ExecutionProgressBroadcaster progressBroadcaster;
     private final com.custos.modules.notification.service.NotificationService notificationService;
+    private final DriveUploadFacadeService driveUploadFacadeService;
+    private final ProcessSanitizer processSanitizer;
 
     /**
      * Synchronously or asynchronously runs a full pipeline execution.
@@ -160,8 +165,9 @@ public class DagPipelineOrchestrator {
                 if (nextId != null && nodeMap.containsKey(nextId) && !executedNodeIds.contains(nextId)) {
                     currentNode = nodeMap.get(nextId);
                 } else {
-                    // Check if there are other unexecuted nodes in pipeline sequentially
-                    currentNode = findNextSequentialNode(nodes, executedNodeIds);
+                    // ไม่มีเส้น On Success: ไปต่อเฉพาะ Node อิสระ (ไม่มีเส้นใดชี้เข้า) ถัดไปตาม stepOrder
+                    // Node ที่อยู่บนกิ่ง On Success/On Failure จะรันได้เฉพาะเมื่อถูก route ไปถึงเท่านั้น
+                    currentNode = findNextRootNode(nodes, executedNodeIds, targetNodes);
                 }
             } else {
                 UUID failId = currentNode.getOnFailureNodeId();
@@ -202,9 +208,9 @@ public class DagPipelineOrchestrator {
         return execution;
     }
 
-    private PipelineStepNode findNextSequentialNode(List<PipelineStepNode> nodes, Set<UUID> executedNodeIds) {
+    private PipelineStepNode findNextRootNode(List<PipelineStepNode> nodes, Set<UUID> executedNodeIds, Set<UUID> targetNodes) {
         for (PipelineStepNode node : nodes) {
-            if (!executedNodeIds.contains(node.getId())) {
+            if (!executedNodeIds.contains(node.getId()) && !targetNodes.contains(node.getId())) {
                 return node;
             }
         }
@@ -355,6 +361,44 @@ public class DagPipelineOrchestrator {
                 stepLog.setAwsSesMessageId(sesMsgId);
                 progressBroadcaster.broadcastLog(executionId, node.getNodeLabel(), "SUCCESS", "Dispatched SES Email to: " + recipient);
                 log.info("Email Alert step executed: {} -> {} (SES: {})", recipient, subject, sesMsgId);
+            }
+
+            case GOOGLE_DRIVE_UPLOAD -> {
+                String sourceFile = (String) config.get("sourceFilePath");
+                if (sourceFile == null || sourceFile.isBlank()) {
+                    sourceFile = context.getLastOutputPath();
+                } else {
+                    sourceFile = context.resolvePlaceholders(sourceFile);
+                }
+                if (sourceFile == null || sourceFile.isBlank() || sourceFile.contains("${")) {
+                    throw new IllegalArgumentException("Source file for Google Drive upload could not be resolved: " + config.get("sourceFilePath"));
+                }
+                processSanitizer.validatePath(sourceFile);
+
+                String folderId = context.resolvePlaceholders((String) config.getOrDefault("folderId", ""));
+                String systemSource = context.resolvePlaceholders((String) config.getOrDefault("systemSource", ""));
+                if (systemSource == null || systemSource.isBlank()) {
+                    systemSource = "CUSTOS_PIPELINE";
+                }
+
+                progressBroadcaster.broadcastLog(executionId, node.getNodeLabel(), "INFO",
+                        "Uploading " + sourceFile + " to Google Drive...");
+
+                DriveUploadResponse result = driveUploadFacadeService.uploadLocalFileAndRecordAudit(
+                        java.nio.file.Path.of(sourceFile), systemSource, folderId, "PIPELINE");
+
+                stepLog.setOutputPath(result.getWebViewLink() != null ? result.getWebViewLink() : result.getDriveFileId());
+                stepLog.setFileSizeBytes(result.getFileSize());
+                stepLog.setLogsText("Uploaded " + result.getFileName() + " to Google Drive (fileId: " + result.getDriveFileId()
+                        + ") and recorded audit log in Firestore");
+
+                // ส่ง Path เดิมต่อเป็น last_output_path เพื่อให้ขั้นถัดไป (เช่น Split & Transfer) ใช้ไฟล์เดิมได้
+                context.setStepOutput(node.getNodeKey(), sourceFile, null, result.getFileSize());
+                context.setVariable(node.getNodeKey() + ".drive_file_id", result.getDriveFileId());
+                context.setVariable(node.getNodeKey() + ".drive_web_view_link", result.getWebViewLink());
+
+                progressBroadcaster.broadcastLog(executionId, node.getNodeLabel(), "SUCCESS",
+                        "Uploaded to Google Drive: " + result.getWebViewLink());
             }
         }
     }

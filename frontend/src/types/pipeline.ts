@@ -1,4 +1,9 @@
-export type TaskType = 'DATABASE_BACKUP' | 'FILE_BACKUP' | 'SPLIT_TRANSFER' | 'EMAIL_ALERT';
+export type TaskType =
+  | 'DATABASE_BACKUP'
+  | 'FILE_BACKUP'
+  | 'SPLIT_TRANSFER'
+  | 'EMAIL_ALERT'
+  | 'GOOGLE_DRIVE_UPLOAD';
 
 export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'ABORTED' | 'SKIPPED';
 
@@ -18,6 +23,9 @@ export interface StepNodeDto {
   configOverrideJson?: string;
   onSuccessNodeId?: string | null;
   onFailureNodeId?: string | null;
+  // เส้นเชื่อมอ้างด้วย nodeKey — ใช้ตอนบันทึก เพราะ Node ใหม่ยังไม่มี UUID
+  onSuccessNodeKey?: string | null;
+  onFailureNodeKey?: string | null;
 }
 
 export interface SavePipelineRequest {
