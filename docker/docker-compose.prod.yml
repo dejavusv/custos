@@ -61,6 +61,13 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       CUSTOS_BACKUP_DEFAULT_DIRECTORY: /var/custos/staging
+      # Google Drive & Firestore (Drive ใช้ OAuth เมื่อกำหนด GOOGLE_DRIVE_OAUTH_* ครบ 3 ค่า)
+      CUSTOS_GCP_ENABLED: ${CUSTOS_GCP_ENABLED:-true}
+      GCP_SERVICE_ACCOUNT_KEY_PATH: ${GCP_SERVICE_ACCOUNT_KEY_PATH:-classpath:credentials/service-account.json}
+      GOOGLE_DRIVE_DEFAULT_FOLDER_ID: ${GOOGLE_DRIVE_DEFAULT_FOLDER_ID:-}
+      GOOGLE_DRIVE_OAUTH_CLIENT_ID: ${GOOGLE_DRIVE_OAUTH_CLIENT_ID:-}
+      GOOGLE_DRIVE_OAUTH_CLIENT_SECRET: ${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: ${GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN:-}
     volumes:
       - staging_prod_data:/var/custos/staging
     networks:

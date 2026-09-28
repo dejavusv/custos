@@ -118,6 +118,10 @@ public class GoogleCloudConfig {
                         .build();
                 log.info("Initializing Google Drive client with OAuth user credentials");
             } else {
+                log.warn("Google Drive OAuth not configured (client-id: {}, client-secret: {}, refresh-token: {}) — falling back to Service Account",
+                        StringUtils.hasText(oauthClientId) ? "set" : "MISSING",
+                        StringUtils.hasText(oauthClientSecret) ? "set" : "MISSING",
+                        StringUtils.hasText(oauthRefreshToken) ? "set" : "MISSING");
                 InputStream in = getCredentialsInputStream();
                 if (in == null) {
                     log.warn("GCP Service Account credentials not found at: {}. Google Drive client will be null.", serviceAccountPath);
