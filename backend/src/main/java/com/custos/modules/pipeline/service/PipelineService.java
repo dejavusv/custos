@@ -14,6 +14,7 @@ import com.custos.shared.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.quartz.CronExpression;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -44,9 +45,17 @@ public class PipelineService {
         PipelineDefinition pipeline;
         boolean isNew = false;
 
+        String cron = request.getCronExpression();
+        if (cron != null && !cron.trim().isEmpty() && !CronExpression.isValidExpression(cron.trim())) {
+            throw new BadRequestException("Invalid cron expression: " + cron);
+        }
+
         if (request.getId() != null) {
             pipeline = pipelineDefinitionRepository.findById(request.getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Pipeline not found: " + request.getId()));
+            if (pipelineDefinitionRepository.existsByNameAndIdNot(request.getName(), pipeline.getId())) {
+                throw new BadRequestException("Pipeline name already exists: " + request.getName());
+            }
             pipeline.setName(request.getName());
             pipeline.setDescription(request.getDescription());
             pipeline.setCronExpression(request.getCronExpression());
@@ -56,7 +65,7 @@ public class PipelineService {
         } else {
             isNew = true;
             if (pipelineDefinitionRepository.existsByName(request.getName())) {
-                throw new IllegalArgumentException("Pipeline name already exists: " + request.getName());
+                throw new BadRequestException("Pipeline name already exists: " + request.getName());
             }
             pipeline = PipelineDefinition.builder()
                     .name(request.getName())
@@ -179,6 +188,134 @@ public class PipelineService {
         }
         // รองรับ client เดิมที่ส่ง UUID มาตรงๆ — ยอมรับเฉพาะ ID ของ Node ที่อยู่ใน Pipeline นี้
         return targetId != null && savedIds.contains(targetId) ? targetId : null;
+    }
+
+    private static final double MOVE_VERTICAL_GAP = 200.0;
+
+    /**
+     * ย้าย Node ที่เลือกจาก Pipeline ต้นทางไป Pipeline ปลายทาง โดยคง ID/Task/Config ไว้
+     * เส้นเชื่อมระหว่าง Node ที่ย้ายด้วยกันจะติดไปด้วย ส่วนเส้นที่ข้ามระหว่างกลุ่มที่ย้ายกับกลุ่มที่อยู่ต่อจะถูกตัดออก
+     */
+    @Transactional
+    public MoveNodesResponse moveNodes(UUID sourceId, MoveNodesRequest request, UserPrincipal currentUser, HttpServletRequest servletRequest) {
+        UUID targetId = request.getTargetPipelineId();
+        if (sourceId.equals(targetId)) {
+            throw new BadRequestException("Source and target pipeline must be different");
+        }
+        PipelineDefinition source = pipelineDefinitionRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pipeline not found: " + sourceId));
+        PipelineDefinition target = pipelineDefinitionRepository.findById(targetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Pipeline not found: " + targetId));
+
+        List<PipelineStepNode> sourceNodes = pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(sourceId);
+        List<PipelineStepNode> targetNodes = pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(targetId);
+
+        Map<UUID, PipelineStepNode> sourceById = new HashMap<>();
+        for (PipelineStepNode n : sourceNodes) {
+            sourceById.put(n.getId(), n);
+        }
+        Set<UUID> selected = new LinkedHashSet<>(request.getNodeIds());
+        for (UUID id : selected) {
+            PipelineStepNode n = sourceById.get(id);
+            if (n == null) {
+                throw new BadRequestException("Node does not belong to the source pipeline: " + id);
+            }
+            if (n.getNodeType() == TaskType.START) {
+                throw new BadRequestException("Start node cannot be moved to another pipeline");
+            }
+        }
+
+        // ตัดเส้นที่ข้ามระหว่างกลุ่มที่ย้าย กับกลุ่มที่อยู่ต่อ
+        for (PipelineStepNode n : sourceNodes) {
+            boolean moving = selected.contains(n.getId());
+            n.setOnSuccessNodeId(keepEdgeWithinGroup(n.getOnSuccessNodeId(), moving, selected));
+            n.setOnFailureNodeId(keepEdgeWithinGroup(n.getOnFailureNodeId(), moving, selected));
+        }
+
+        List<PipelineStepNode> moving = sourceNodes.stream()
+                .filter(n -> selected.contains(n.getId()))
+                .collect(Collectors.toList());
+
+        // nodeKey ต้องไม่ซ้ำใน Pipeline ปลายทาง — ถ้าซ้ำให้ต่อท้าย _2, _3 ...
+        Set<String> usedKeys = targetNodes.stream().map(PipelineStepNode::getNodeKey).collect(Collectors.toCollection(HashSet::new));
+        Set<String> movingOriginalKeys = moving.stream().map(PipelineStepNode::getNodeKey).collect(Collectors.toSet());
+        Map<String, String> renamedKeys = new HashMap<>();
+        for (PipelineStepNode n : moving) {
+            String key = n.getNodeKey();
+            if (usedKeys.contains(key)) {
+                int suffix = 2;
+                String candidate = key + "_" + suffix;
+                while (usedKeys.contains(candidate) || movingOriginalKeys.contains(candidate)) {
+                    candidate = key + "_" + (++suffix);
+                }
+                renamedKeys.put(key, candidate);
+                key = candidate;
+            }
+            usedKeys.add(key);
+        }
+
+        double offsetY = 0.0;
+        int nextStepOrder = 0;
+        if (!targetNodes.isEmpty()) {
+            double targetMaxY = targetNodes.stream().mapToDouble(PipelineStepNode::getPositionY).max().orElse(0.0);
+            double movingMinY = moving.stream().mapToDouble(PipelineStepNode::getPositionY).min().orElse(0.0);
+            offsetY = targetMaxY + MOVE_VERTICAL_GAP - movingMinY;
+            nextStepOrder = targetNodes.stream().mapToInt(PipelineStepNode::getStepOrder).max().orElse(-1) + 1;
+        }
+
+        for (PipelineStepNode n : moving) {
+            String newKey = renamedKeys.get(n.getNodeKey());
+            n.setPipeline(target);
+            n.setPositionY(n.getPositionY() + offsetY);
+            n.setStepOrder(nextStepOrder++);
+            if (newKey != null) {
+                n.setNodeKey(newKey);
+            }
+        }
+        // อัปเดต placeholder ${oldKey.xxx} ใน config ของ Node ที่ถูกเปลี่ยน key
+        if (!renamedKeys.isEmpty()) {
+            for (PipelineStepNode n : moving) {
+                String json = n.getConfigOverrideJson();
+                if (json == null) {
+                    continue;
+                }
+                for (Map.Entry<String, String> e : renamedKeys.entrySet()) {
+                    json = json.replace("${" + e.getKey() + ".", "${" + e.getValue() + ".");
+                }
+                n.setConfigOverrideJson(json);
+            }
+        }
+
+        List<PipelineStepNode> remaining = sourceNodes.stream().filter(n -> !selected.contains(n.getId())).collect(Collectors.toList());
+        List<PipelineStepNode> targetAll = new ArrayList<>(targetNodes);
+        targetAll.addAll(moving);
+
+        dagCycleDetector.validateNodes(remaining);
+        dagCycleDetector.validateNodes(targetAll);
+        pipelineStepNodeRepository.saveAll(sourceNodes);
+        pipelineStepNodeRepository.flush();
+
+        auditLogService.logFromRequest(
+                currentUser != null ? currentUser.getId() : null,
+                currentUser != null ? currentUser.getUsername() : "SYSTEM",
+                "MOVE_PIPELINE_NODES",
+                "PIPELINE",
+                "Moved " + moving.size() + " node(s) from pipeline '" + source.getName() + "' to '" + target.getName() + "'",
+                servletRequest
+        );
+
+        return MoveNodesResponse.builder()
+                .source(mapToDetailResponse(source, remaining))
+                .target(mapToDetailResponse(target, pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(targetId)))
+                .movedCount(moving.size())
+                .build();
+    }
+
+    private UUID keepEdgeWithinGroup(UUID edgeTarget, boolean sourceIsMoving, Set<UUID> selected) {
+        if (edgeTarget == null) {
+            return null;
+        }
+        return selected.contains(edgeTarget) == sourceIsMoving ? edgeTarget : null;
     }
 
     @Transactional(readOnly = true)

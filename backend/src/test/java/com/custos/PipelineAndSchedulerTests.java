@@ -359,6 +359,77 @@ public class PipelineAndSchedulerTests {
         return pipelineService.savePipeline(request, null, new MockHttpServletRequest());
     }
 
+    @Test
+    @DisplayName("Save Pipeline - invalid cron is rejected, duplicate name on update is rejected")
+    public void testSaveRejectsInvalidCronAndDuplicateName() {
+        SavePipelineRequest badCron = new SavePipelineRequest();
+        badCron.setName("Bad Cron " + UUID.randomUUID());
+        badCron.setCronExpression("not a cron");
+        badCron.setNodes(new ArrayList<>());
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class,
+                () -> pipelineService.savePipeline(badCron, null, new MockHttpServletRequest()));
+
+        SavePipelineRequest weekly = new SavePipelineRequest();
+        weekly.setName("Weekly " + UUID.randomUUID());
+        weekly.setCronExpression("0 30 2 ? * MON,WED,FRI");
+        weekly.setNodes(new ArrayList<>());
+        PipelineDetailResponse first = pipelineService.savePipeline(weekly, null, new MockHttpServletRequest());
+        Assertions.assertEquals("0 30 2 ? * MON,WED,FRI", first.getCronExpression());
+
+        PipelineDetailResponse second = savePipelineWith("Other ");
+        SavePipelineRequest rename = new SavePipelineRequest();
+        rename.setId(second.getId());
+        rename.setName(first.getName());
+        rename.setNodes(new ArrayList<>());
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class,
+                () -> pipelineService.savePipeline(rename, null, new MockHttpServletRequest()));
+    }
+
+    @Test
+    @DisplayName("Move nodes - keeps internal edges, cuts crossing edges, renames colliding keys, rejects Start")
+    public void testMoveNodesBetweenPipelines() {
+        PipelineDetailResponse source = savePipelineWith("Move Src ",
+                controlNode("start", TaskType.START, 0, "a", null),
+                controlNode("a", TaskType.DATABASE_BACKUP, 1, "b", null),
+                controlNode("b", TaskType.SPLIT_TRANSFER, 2, "c", null),
+                controlNode("c", TaskType.EMAIL_ALERT, 3, null, null));
+        PipelineDetailResponse target = savePipelineWith("Move Dst ",
+                controlNode("a", TaskType.FILE_BACKUP, 0, null, null));
+
+        Map<String, StepNodeDto> src = new HashMap<>();
+        source.getNodes().forEach(n -> src.put(n.getNodeKey(), n));
+
+        com.custos.modules.pipeline.dto.MoveNodesRequest request = new com.custos.modules.pipeline.dto.MoveNodesRequest(
+                target.getId(), List.of(src.get("a").getId(), src.get("b").getId()));
+        com.custos.modules.pipeline.dto.MoveNodesResponse result =
+                pipelineService.moveNodes(source.getId(), request, null, new MockHttpServletRequest());
+
+        Assertions.assertEquals(2, result.getMovedCount());
+        Assertions.assertEquals(2, result.getSource().getNodes().size());
+        Map<String, StepNodeDto> remaining = new HashMap<>();
+        result.getSource().getNodes().forEach(n -> remaining.put(n.getNodeKey(), n));
+        Assertions.assertNull(remaining.get("start").getOnSuccessNodeId(), "Edge from a node that stays into a moved node must be cut");
+
+        Map<String, StepNodeDto> moved = new HashMap<>();
+        result.getTarget().getNodes().forEach(n -> moved.put(n.getNodeKey(), n));
+        Assertions.assertEquals(3, moved.size());
+        Assertions.assertTrue(moved.containsKey("a_2"), "Colliding key must be renamed");
+        Assertions.assertEquals(src.get("a").getId(), moved.get("a_2").getId(), "Node ID is kept");
+        Assertions.assertEquals(src.get("b").getId(), moved.get("a_2").getOnSuccessNodeId(), "Edge between moved nodes is kept");
+        Assertions.assertNull(moved.get("b").getOnSuccessNodeId(), "Edge from a moved node into a node that stays must be cut");
+
+        com.custos.modules.pipeline.dto.MoveNodesRequest startMove = new com.custos.modules.pipeline.dto.MoveNodesRequest(
+                target.getId(), List.of(src.get("start").getId()));
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class,
+                () -> pipelineService.moveNodes(source.getId(), startMove, null, new MockHttpServletRequest()));
+
+        com.custos.modules.pipeline.dto.MoveNodesRequest foreign = new com.custos.modules.pipeline.dto.MoveNodesRequest(
+                target.getId(), List.of(moved.get("b").getId()));
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class,
+                () -> pipelineService.moveNodes(source.getId(), foreign, null, new MockHttpServletRequest()),
+                "A node that is not in the source pipeline must be rejected");
+    }
+
     private StepNodeDto fileBackupNode(String key, int order, String sourcePath, String destDir, String successKey, String failureKey) {
         return StepNodeDto.builder().nodeKey(key).nodeLabel(key).nodeType(TaskType.FILE_BACKUP).stepOrder(order)
                 .configOverrideJson(String.format("{\"sourcePath\":\"%s\",\"destinationDir\":\"%s\"}",

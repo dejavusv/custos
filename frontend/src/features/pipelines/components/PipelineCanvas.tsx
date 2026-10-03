@@ -22,7 +22,6 @@ import {
   Plus,
   Save,
   Play,
-  Clock,
   CheckCircle2,
   AlertTriangle,
   HardDriveUpload,
@@ -48,6 +47,8 @@ import { NotificationNode } from './nodes/NotificationNode';
 import { GoogleDriveNode } from './nodes/GoogleDriveNode';
 import { LineNotifyNode } from './nodes/LineNotifyNode';
 import { NodeConfigModal } from './NodeConfigModal';
+import { SchedulePicker } from './SchedulePicker';
+import { MoveNodesDialog } from './MoveNodesDialog';
 import {
   MisfirePolicy,
   PipelineDetailResponse,
@@ -59,7 +60,10 @@ import { pipelineApi } from '../../../services/pipelineApi';
 
 interface PipelineCanvasProps {
   initialPipeline?: PipelineDetailResponse | null;
+  // Pipeline ทั้งหมด ใช้เป็นรายการปลายทางของการย้าย Task
+  pipelines?: PipelineDetailResponse[];
   onSaved?: (pipeline: PipelineDetailResponse) => void;
+  onMoved?: (source: PipelineDetailResponse, target: PipelineDetailResponse) => void;
   onTriggered?: (executionId: string) => void;
 }
 
@@ -113,12 +117,18 @@ const findRootNode = (nodes: StepNodeDto[]): StepNodeDto | undefined => {
 
 export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
   initialPipeline,
+  pipelines = [],
   onSaved,
+  onMoved,
   onTriggered,
 }) => {
-  const [pipelineName, setPipelineName] = useState(initialPipeline?.name || 'Automated Backup & Transfer Flow');
+  const [pipelineName, setPipelineName] = useState(initialPipeline?.name ?? '');
+  const [nameTouched, setNameTouched] = useState(false);
   const [description, setDescription] = useState(initialPipeline?.description || 'Daily database dump, tar compression, and SFTP transfer');
-  const [cronExpression, setCronExpression] = useState(initialPipeline?.cronExpression || '0 0 2 * * ?');
+  // Pipeline ที่มีอยู่แล้วใช้ค่าเดิม (รวมถึง Manual = ว่าง) ส่วน Pipeline ใหม่เริ่มที่ทุกวัน 02:00
+  const [cronExpression, setCronExpression] = useState(initialPipeline ? initialPipeline.cronExpression ?? '' : '0 0 2 * * ?');
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [timezone, setTimezone] = useState(initialPipeline?.timezone || 'UTC');
   const [misfirePolicy, setMisfirePolicy] = useState<MisfirePolicy>(initialPipeline?.misfirePolicy || 'SMART_POLICY');
   const [isActive, setIsActive] = useState(initialPipeline?.isActive ?? true);
@@ -127,6 +137,11 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
 
   // เส้นเชื่อมที่รอผู้ใช้เลือกชนิด (On Success / On Failed)
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
+
+  // หน้าต่างย้าย Task ไป Pipeline อื่น
+  const [moveDialog, setMoveDialog] = useState<{ nodeIds: string[]; startExcluded: boolean } | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   // Modal State
   const [editingNode, setEditingNode] = useState<{
@@ -311,13 +326,27 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
     [setNodes, setEdges]
   );
 
-  // Attach onEdit / onDelete listeners to nodes
+  // เปิดหน้าต่างย้าย Task: ถ้า Node ที่กดอยู่ในกลุ่มที่เลือกไว้ (Ctrl+คลิก) ย้ายทั้งกลุ่ม ไม่เช่นนั้นย้ายเฉพาะ Node นั้น
+  // Start ย้ายไม่ได้ จึงตัดออกจากกลุ่มเสมอ
+  const handleOpenMove = useCallback(
+    (nodeId: string) => {
+      const selectedIds = nodes.filter((n) => n.selected).map((n) => n.id);
+      const requested = selectedIds.includes(nodeId) ? selectedIds : [nodeId];
+      const movable = requested.filter((id) => nodes.find((n) => n.id === id)?.type !== 'START');
+      setMoveError(null);
+      setMoveDialog({ nodeIds: movable, startExcluded: movable.length !== requested.length });
+    },
+    [nodes]
+  );
+
+  // Attach onEdit / onMove / onDelete listeners to nodes
   const nodesWithHandlers = useMemo(() => {
     return nodes.map((n) => ({
       ...n,
       data: {
         ...n.data,
         onDelete: () => handleDeleteNode(n.id, (n.data.label as string) || n.id),
+        onMove: n.type === 'START' ? undefined : () => handleOpenMove(n.id),
         onEdit: () => {
           setEditingNode({
             id: n.id,
@@ -329,7 +358,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
         },
       },
     }));
-  }, [nodes, handleDeleteNode]);
+  }, [nodes, handleDeleteNode, handleOpenMove]);
 
   // เพิ่มเส้นเชื่อม — แต่ละ Node มีได้เส้นละชนิด (On Success / On Failure) ชนิดละ 1 เส้น จึงแทนที่เส้นชนิดเดิมของ Node ต้นทาง
   const applyEdge = useCallback(
@@ -492,10 +521,22 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
     }
   };
 
-  const handleSavePipeline = async () => {
+  // บันทึก Pipeline (ตรวจความถูกต้อง + เรียก API) — คืนผลลัพธ์จาก Backend หรือ null ถ้าไม่ผ่าน/ล้มเหลว
+  const persistPipeline = async (): Promise<PipelineDetailResponse | null> => {
     try {
       setIsSaving(true);
       setStatusMessage(null);
+
+      if (!pipelineName.trim()) {
+        setNameTouched(true);
+        setStatusMessage({ text: 'Error: Pipeline name is required', type: 'error' });
+        return null;
+      }
+
+      if (scheduleError) {
+        setStatusMessage({ text: `Error: ${scheduleError}`, type: 'error' });
+        return null;
+      }
 
       const startCount = nodes.filter((n) => n.type === 'START').length;
       if (startCount !== 1) {
@@ -505,7 +546,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
             : 'Error: A pipeline can have only one Start node',
           type: 'error',
         });
-        return;
+        return null;
       }
 
       // เส้นเชื่อมส่งเป็น nodeKey เพราะ Node ใหม่ยังไม่มี UUID (Backend จะแปลงเป็น ID ให้หลังบันทึก)
@@ -513,7 +554,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       const duplicateKey = nodeKeys.find((key, index) => nodeKeys.indexOf(key) !== index);
       if (duplicateKey) {
         setStatusMessage({ text: `Error: Duplicate node key "${duplicateKey}"`, type: 'error' });
-        return;
+        return null;
       }
       const keyByNodeId = new Map(nodes.map((node, index) => [node.id, nodeKeys[index]]));
 
@@ -553,8 +594,8 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       });
 
       const payload: SavePipelineRequest = {
-        id: initialPipeline?.id,
-        name: pipelineName,
+        id: initialPipeline?.id ?? createdId ?? undefined,
+        name: pipelineName.trim(),
         description,
         cronExpression,
         timezone,
@@ -564,21 +605,59 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       };
 
       let result: PipelineDetailResponse;
-      if (initialPipeline?.id) {
-        result = await pipelineApi.updatePipeline(initialPipeline.id, payload);
+      if (payload.id) {
+        result = await pipelineApi.updatePipeline(payload.id, payload);
       } else {
         result = await pipelineApi.createPipeline(payload);
+        // เก็บ ID ไว้ เผื่อขั้นตอนต่อไป (เช่น ย้าย Task) ล้มเหลว จะได้ไม่สร้าง Pipeline ซ้ำเมื่อกดลองใหม่
+        setCreatedId(result.id);
       }
-
-      setStatusMessage({ text: 'Pipeline workflow and Quartz schedule saved successfully!', type: 'success' });
-      if (onSaved) {
-        onSaved(result);
-      }
+      return result;
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || err.message || 'Failed to save pipeline';
       setStatusMessage({ text: `Error: ${errorMsg}`, type: 'error' });
+      return null;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSavePipeline = async () => {
+    const result = await persistPipeline();
+    if (!result) return;
+    setStatusMessage({ text: 'Pipeline workflow and Quartz schedule saved successfully!', type: 'success' });
+    if (onSaved) {
+      onSaved(result);
+    }
+  };
+
+  // ย้าย Task ที่เลือกไป Pipeline อื่น: บันทึก Pipeline ปัจจุบันก่อน (ให้ทุก Node มี ID จริงและไม่เสียงานที่ยังไม่ได้ Save)
+  // แล้วระบุ Node ที่ย้ายด้วย nodeKey ซึ่งไม่ซ้ำกันภายใน Pipeline
+  const handleConfirmMove = async (targetPipelineId: string) => {
+    if (!moveDialog) return;
+    setMoveError(null);
+    setIsMoving(true);
+    try {
+      const keysToMove = moveDialog.nodeIds.map((id) => nodes.find((n) => n.id === id)?.data.nodeKey as string | undefined);
+      const saved = await persistPipeline();
+      if (!saved) {
+        setMoveError('Could not save the current pipeline, so nothing was moved. See the message above the canvas.');
+        return;
+      }
+      const idsToMove = saved.nodes.filter((n) => keysToMove.includes(n.nodeKey)).map((n) => n.id as string);
+      const res = await pipelineApi.moveNodes(saved.id, { targetPipelineId, nodeIds: idsToMove });
+      setMoveDialog(null);
+      setStatusMessage({
+        text: `Moved ${res.movedCount} task(s) to "${res.target.name}"`,
+        type: 'success',
+      });
+      if (onMoved) {
+        onMoved(res.source, res.target);
+      }
+    } catch (err: any) {
+      setMoveError(err.response?.data?.message || err.message || 'Failed to move tasks');
+    } finally {
+      setIsMoving(false);
     }
   };
 
@@ -606,13 +685,27 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       <Card className="border-slate-800 bg-slate-900/90 p-5 shadow-xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5 flex-1">
+            <label htmlFor="pipeline-name" className="block text-[11px] font-medium text-slate-400 px-1">
+              Pipeline name <span className="text-red-400">*</span>
+            </label>
             <input
+              id="pipeline-name"
               type="text"
               value={pipelineName}
+              maxLength={100}
               onChange={(e) => setPipelineName(e.target.value)}
-              className="text-lg font-bold text-white bg-transparent border-b border-transparent hover:border-slate-700 focus:border-primary focus:outline-none px-1 w-full max-w-lg transition-colors"
-              placeholder="Pipeline Name"
+              onBlur={() => setNameTouched(true)}
+              aria-invalid={nameTouched && !pipelineName.trim()}
+              className={`text-lg font-bold text-white bg-slate-950 border rounded-lg focus:outline-none px-3 py-1.5 w-full max-w-lg transition-colors ${
+                nameTouched && !pipelineName.trim()
+                  ? 'border-red-500/60 focus:border-red-500'
+                  : 'border-slate-800 hover:border-slate-700 focus:border-primary'
+              }`}
+              placeholder="e.g. Nightly DB Backup"
             />
+            {nameTouched && !pipelineName.trim() && (
+              <p className="text-[11px] text-red-400 px-1">Please enter a pipeline name</p>
+            )}
             <input
               type="text"
               value={description}
@@ -623,18 +716,39 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
-              <Clock className="w-3.5 h-3.5 text-primary" />
-              <span className="text-slate-400">Cron:</span>
-              <input
-                type="text"
-                value={cronExpression}
-                onChange={(e) => setCronExpression(e.target.value)}
-                className="bg-transparent font-mono text-white text-xs w-28 focus:outline-none"
-                placeholder="0 0 2 * * ?"
-              />
-            </div>
+            <Button
+              onClick={handleSavePipeline}
+              disabled={isSaving}
+              className="gap-2 bg-primary hover:bg-primary/90 text-xs font-semibold shadow-lg shadow-primary/20"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {isSaving ? 'Saving...' : 'Save Pipeline'}
+            </Button>
 
+            {initialPipeline?.id && (
+              <Button
+                onClick={handleTriggerPipeline}
+                variant="outline"
+                className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-xs font-semibold"
+              >
+                <Play className="w-3.5 h-3.5" />
+                Trigger Run
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Schedule / Timezone / Misfire / Active */}
+        <div className="flex items-start gap-3 flex-wrap mt-4">
+          <SchedulePicker
+            value={cronExpression}
+            onChange={(cron, error) => {
+              setCronExpression(cron);
+              setScheduleError(error);
+            }}
+          />
+
+          <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
               <label className="text-slate-400">Timezone:</label>
               <select
@@ -671,26 +785,6 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
               />
               <span>Active</span>
             </label>
-
-            <Button
-              onClick={handleSavePipeline}
-              disabled={isSaving}
-              className="gap-2 bg-primary hover:bg-primary/90 text-xs font-semibold shadow-lg shadow-primary/20"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {isSaving ? 'Saving...' : 'Save Pipeline'}
-            </Button>
-
-            {initialPipeline?.id && (
-              <Button
-                onClick={handleTriggerPipeline}
-                variant="outline"
-                className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 text-xs font-semibold"
-              >
-                <Play className="w-3.5 h-3.5" />
-                Trigger Run
-              </Button>
-            )}
           </div>
         </div>
 
@@ -800,6 +894,9 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           onConnect={onConnect}
           isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
+          // Ctrl/Cmd+คลิกเพื่อเลือกหลาย Task (Shift+ลากเพื่อกรอบเลือก) — ปิด Backspace-ลบ เพราะข้ามการยืนยันของปุ่ม X
+          multiSelectionKeyCode={['Control', 'Meta']}
+          deleteKeyCode={null}
           fitView
           fitViewOptions={{ padding: 0.3 }}
           className="bg-slate-950"
@@ -856,6 +953,28 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Move Tasks Dialog */}
+      {moveDialog && (
+        <MoveNodesDialog
+          open
+          onClose={() => setMoveDialog(null)}
+          targets={pipelines
+            .filter((p) => p.id !== (initialPipeline?.id ?? createdId))
+            .map((p) => ({ id: p.id, name: p.name }))}
+          nodeCount={moveDialog.nodeIds.length}
+          internalEdgeCount={
+            edges.filter((e) => moveDialog.nodeIds.includes(e.source) && moveDialog.nodeIds.includes(e.target)).length
+          }
+          crossingEdgeCount={
+            edges.filter((e) => moveDialog.nodeIds.includes(e.source) !== moveDialog.nodeIds.includes(e.target)).length
+          }
+          startExcluded={moveDialog.startExcluded}
+          isMoving={isMoving}
+          error={moveError}
+          onConfirm={handleConfirmMove}
+        />
+      )}
 
       {/* Node Config Modal */}
       {editingNode && (

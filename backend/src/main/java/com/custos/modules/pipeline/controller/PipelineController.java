@@ -1,6 +1,8 @@
 package com.custos.modules.pipeline.controller;
 
 import com.custos.modules.auth.security.UserPrincipal;
+import com.custos.modules.pipeline.dto.MoveNodesRequest;
+import com.custos.modules.pipeline.dto.MoveNodesResponse;
 import com.custos.modules.pipeline.dto.PipelineDetailResponse;
 import com.custos.modules.pipeline.dto.PipelineExecutionResponse;
 import com.custos.modules.pipeline.dto.SavePipelineRequest;
@@ -59,6 +61,17 @@ public class PipelineController {
     ) {
         request.setId(id);
         return ResponseEntity.ok(pipelineService.savePipeline(request, currentUser, servletRequest));
+    }
+
+    @PostMapping("/{id}/move-nodes")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN')")
+    public ResponseEntity<MoveNodesResponse> moveNodes(
+            @PathVariable UUID id,
+            @Valid @RequestBody MoveNodesRequest request,
+            @AuthenticationPrincipal UserPrincipal currentUser,
+            HttpServletRequest servletRequest
+    ) {
+        return ResponseEntity.ok(pipelineService.moveNodes(id, request, currentUser, servletRequest));
     }
 
     @DeleteMapping("/{id}")

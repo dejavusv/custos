@@ -23,6 +23,7 @@ import {
   PipelineExecutionResponse,
 } from '../../types/pipeline';
 import { pipelineApi } from '../../services/pipelineApi';
+import { describeCron } from './utils/schedule';
 
 export const PipelinesPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'builder' | 'pipelines' | 'history'>('pipelines');
@@ -30,6 +31,8 @@ export const PipelinesPage: React.FC = () => {
   // selectedPipeline = Pipeline ที่ใช้กรอง Execution History, builderPipeline = Pipeline ที่เปิดใน Builder (null = สร้างใหม่)
   const [selectedPipeline, setSelectedPipeline] = useState<PipelineDetailResponse | null>(null);
   const [builderPipeline, setBuilderPipeline] = useState<PipelineDetailResponse | null>(null);
+  // เพิ่มค่าเมื่อต้องบังคับให้ Canvas โหลดใหม่ทั้งที่ Pipeline เดิม (เช่น หลังย้าย Task)
+  const [builderVersion, setBuilderVersion] = useState(0);
   const [executions, setExecutions] = useState<PipelineExecutionResponse[]>([]);
   const [selectedExecution, setSelectedExecution] = useState<PipelineExecutionResponse | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -248,11 +251,19 @@ export const PipelinesPage: React.FC = () => {
       {activeTab === 'builder' && (
         <div className="space-y-4">
           <PipelineCanvas
-            key={builderPipeline?.id || 'new'}
+            key={`${builderPipeline?.id || 'new'}-${builderVersion}`}
             initialPipeline={builderPipeline}
+            pipelines={pipelines}
             onSaved={(saved) => {
               setBuilderPipeline(saved);
               setSelectedPipeline(saved);
+              fetchPipelines();
+            }}
+            onMoved={(source) => {
+              // โหลด Canvas ใหม่จากข้อมูลล่าสุดของ Pipeline ต้นทาง (Task ที่ย้ายออกไปแล้วต้องหายจากหน้าจอ)
+              setBuilderPipeline(source);
+              setSelectedPipeline(source);
+              setBuilderVersion((v) => v + 1);
               fetchPipelines();
             }}
             onTriggered={() => {
@@ -311,8 +322,10 @@ export const PipelinesPage: React.FC = () => {
 
                   <div className="space-y-1.5 pt-2 border-t border-slate-800 text-xs">
                     <div className="flex justify-between text-slate-400">
-                      <span>Cron:</span>
-                      <span className="font-mono text-slate-200">{pipe.cronExpression || 'Manual Only'}</span>
+                      <span>Schedule:</span>
+                      <span className="text-slate-200 text-right" title={pipe.cronExpression || undefined}>
+                        {describeCron(pipe.cronExpression)}
+                      </span>
                     </div>
                     <div className="flex justify-between text-slate-400">
                       <span>Timezone:</span>

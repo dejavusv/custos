@@ -1,5 +1,7 @@
 import { api } from './api';
 import {
+  MoveNodesRequest,
+  MoveNodesResponse,
   PipelineDetailResponse,
   PipelineExecutionResponse,
   SavePipelineRequest,
@@ -23,6 +25,11 @@ export const pipelineApi = {
 
   updatePipeline: async (id: string, data: SavePipelineRequest): Promise<PipelineDetailResponse> => {
     const response = await api.put<PipelineDetailResponse>(`/pipelines/${id}`, data);
+    return response.data;
+  },
+
+  moveNodes: async (sourceId: string, data: MoveNodesRequest): Promise<MoveNodesResponse> => {
+    const response = await api.post<MoveNodesResponse>(`/pipelines/${sourceId}/move-nodes`, data);
     return response.data;
   },
 

@@ -42,6 +42,17 @@ export interface SavePipelineRequest {
   nodes: StepNodeDto[];
 }
 
+export interface MoveNodesRequest {
+  targetPipelineId: string;
+  nodeIds: string[];
+}
+
+export interface MoveNodesResponse {
+  source: PipelineDetailResponse;
+  target: PipelineDetailResponse;
+  movedCount: number;
+}
+
 export interface PipelineDetailResponse {
   id: string;
   name: string;

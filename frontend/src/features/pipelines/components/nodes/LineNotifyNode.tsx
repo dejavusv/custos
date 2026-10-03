@@ -11,6 +11,7 @@ export interface LineNotifyNodeData {
   taskTitle?: string;
   message?: string;
   onEdit?: () => void;
+  onMove?: () => void;
   onDelete?: () => void;
   [key: string]: unknown;
 }
@@ -48,7 +49,7 @@ export const LineNotifyNode: React.FC<NodeProps> = ({ data, selected }) => {
           </div>
         </div>
 
-        <NodeHeaderActions onEdit={nodeData.onEdit} onDelete={nodeData.onDelete} />
+        <NodeHeaderActions onEdit={nodeData.onEdit} onMove={nodeData.onMove} onDelete={nodeData.onDelete} />
       </div>
 
       <div className="space-y-1 pt-1 border-t border-slate-800/80 text-[11px]">

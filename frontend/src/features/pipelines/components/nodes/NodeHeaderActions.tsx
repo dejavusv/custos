@@ -1,13 +1,14 @@
 import React from 'react';
-import { Settings2, X } from 'lucide-react';
+import { ArrowRightLeft, Settings2, X } from 'lucide-react';
 
 interface NodeHeaderActionsProps {
   onEdit?: () => void;
+  onMove?: () => void;
   onDelete?: () => void;
 }
 
-// ปุ่มตั้งค่า / ลบ ที่มุมขวาบนของทุก Node (class "nodrag" กันไม่ให้การคลิกกลายเป็นการลาก Node)
-export const NodeHeaderActions: React.FC<NodeHeaderActionsProps> = ({ onEdit, onDelete }) => (
+// ปุ่มตั้งค่า / ย้าย / ลบ ที่มุมขวาบนของทุก Node (class "nodrag" กันไม่ให้การคลิกกลายเป็นการลาก Node)
+export const NodeHeaderActions: React.FC<NodeHeaderActionsProps> = ({ onEdit, onMove, onDelete }) => (
   <div className="flex items-center gap-0.5">
     {onEdit && (
       <button
@@ -20,6 +21,19 @@ export const NodeHeaderActions: React.FC<NodeHeaderActionsProps> = ({ onEdit, on
         title="Configure Step"
       >
         <Settings2 className="w-3.5 h-3.5" />
+      </button>
+    )}
+    {onMove && (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onMove();
+        }}
+        className="nodrag text-slate-400 hover:text-sky-400 p-1 rounded hover:bg-sky-500/10 transition-colors"
+        title="Move to another pipeline (Ctrl+click to select several steps)"
+      >
+        <ArrowRightLeft className="w-3.5 h-3.5" />
       </button>
     )}
     {onDelete && (

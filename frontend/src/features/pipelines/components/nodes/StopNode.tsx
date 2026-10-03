@@ -6,6 +6,7 @@ import { NodeHeaderActions } from './NodeHeaderActions';
 export interface StopNodeData {
   label: string;
   nodeKey: string;
+  onMove?: () => void;
   onDelete?: () => void;
   [key: string]: unknown;
 }
@@ -37,7 +38,7 @@ export const StopNode: React.FC<NodeProps> = ({ data, selected }) => {
             {nodeData.label || 'Stop'}
           </div>
         </div>
-        <NodeHeaderActions onDelete={nodeData.onDelete} />
+        <NodeHeaderActions onMove={nodeData.onMove} onDelete={nodeData.onDelete} />
       </div>
     </div>
   );
