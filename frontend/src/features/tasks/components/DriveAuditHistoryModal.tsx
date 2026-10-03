@@ -140,7 +140,7 @@ export const DriveAuditHistoryModal: React.FC<DriveAuditHistoryModalProps> = ({
             </div>
           ) : (
             <div className="border border-slate-800 rounded-lg overflow-hidden">
-              <table className="w-full text-left text-xs text-slate-300">
+              <table className="responsive-table w-full text-left text-xs text-slate-300">
                 <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider border-b border-slate-800 font-semibold">
                   <tr>
                     <th className="px-3 py-2.5">วันเวลา</th>
@@ -155,15 +155,15 @@ export const DriveAuditHistoryModal: React.FC<DriveAuditHistoryModalProps> = ({
                 <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
                   {logs.map((log) => (
                     <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-400 font-mono">
+                      <td data-label="วันเวลา" className="px-3 py-2.5 whitespace-nowrap text-slate-400 font-mono">
                         {formatDate(log.createdAt)}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
+                      <td data-label="ระบบต้นทาง" className="px-3 py-2.5 whitespace-nowrap">
                         <Badge variant="outline" className="bg-blue-950/40 text-blue-300 border-blue-800/60 font-mono text-[11px]">
                           {log.systemSource}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td data-label="ชื่อไฟล์" className="px-3 py-2.5">
                         <div className="max-w-[220px] truncate font-medium text-white" title={log.fileName}>
                           {log.fileName}
                         </div>
@@ -173,13 +173,13 @@ export const DriveAuditHistoryModal: React.FC<DriveAuditHistoryModalProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-400 font-mono">
+                      <td data-label="ขนาด" className="px-3 py-2.5 whitespace-nowrap text-slate-400 font-mono">
                         {formatFileSize(log.fileSize)}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-400">
+                      <td data-label="ผู้อัปโหลด" className="px-3 py-2.5 whitespace-nowrap text-slate-400">
                         {log.uploadedBy || '-'}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
+                      <td data-label="สถานะ" className="px-3 py-2.5 whitespace-nowrap">
                         {log.status === 'SUCCESS' ? (
                           <Badge variant="success" className="gap-1 text-[10px]">
                             <CheckCircle2 className="w-3 h-3" />
@@ -192,7 +192,7 @@ export const DriveAuditHistoryModal: React.FC<DriveAuditHistoryModalProps> = ({
                           </Badge>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right">
+                      <td data-label="ลิงก์ & การจัดการ" className="px-3 py-2.5 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           {log.driveFileId && (
                             <Button

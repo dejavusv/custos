@@ -807,9 +807,9 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       </Card>
 
       {/* React Flow Visual Canvas */}
-      <div className="h-[600px] w-full rounded-2xl border border-slate-800 bg-slate-950 relative overflow-hidden shadow-2xl">
+      <div className="h-[70vh] min-h-[420px] md:h-[600px] w-full rounded-2xl border border-slate-800 bg-slate-950 relative overflow-hidden shadow-2xl">
         {/* Step Palette Toolbar */}
-        <div className="absolute top-4 left-4 max-w-[calc(100%-2rem)] z-10 flex flex-wrap items-center gap-2 bg-slate-900/90 backdrop-blur-md p-2 rounded-xl border border-slate-800 shadow-xl">
+        <div className="absolute top-4 left-4 max-w-[calc(100%-2rem)] z-10 flex flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible [&>*]:shrink-0 items-center gap-2 bg-slate-900/90 backdrop-blur-md p-2 rounded-xl border border-slate-800 shadow-xl">
           <span className="text-xs font-semibold text-slate-400 px-2 flex items-center gap-1.5">
             <Plus className="w-3.5 h-3.5 text-primary" /> Add Step:
           </span>
@@ -904,7 +904,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           <Background color="#334155" gap={20} size={1} />
           <Controls className="!bg-slate-900 !border-slate-800 !rounded-xl !shadow-xl [&>button]:!bg-slate-800 [&>button]:!border-slate-700 [&>button]:!text-slate-200" />
           <MiniMap
-            className="!bg-slate-900/90 !border-slate-800 !rounded-xl overflow-hidden shadow-xl"
+            className="!hidden md:!block !bg-slate-900/90 !border-slate-800 !rounded-xl overflow-hidden shadow-xl"
             nodeColor="#3b82f6"
             maskColor="rgba(15, 23, 42, 0.7)"
           />

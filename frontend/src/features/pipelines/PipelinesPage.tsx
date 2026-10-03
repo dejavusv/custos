@@ -185,7 +185,7 @@ export const PipelinesPage: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Layers className="w-6 h-6 text-primary" />
             Pipeline Orchestration & Scheduler
           </h1>
@@ -206,13 +206,13 @@ export const PipelinesPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-800 gap-2">
+      <div className="flex border-b border-slate-800 gap-2 overflow-x-auto">
         <button
           onClick={() => {
             setActiveTab('pipelines');
             fetchPipelines();
           }}
-          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 whitespace-nowrap shrink-0 transition-colors ${
             activeTab === 'pipelines'
               ? 'border-primary text-primary'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -224,7 +224,7 @@ export const PipelinesPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('builder')}
-          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 whitespace-nowrap shrink-0 transition-colors ${
             activeTab === 'builder'
               ? 'border-primary text-primary'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -236,7 +236,7 @@ export const PipelinesPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('history')}
-          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 whitespace-nowrap shrink-0 transition-colors ${
             activeTab === 'history'
               ? 'border-primary text-primary'
               : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -428,8 +428,8 @@ export const PipelinesPage: React.FC = () => {
             </Button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
+          <div className="md:overflow-x-auto">
+            <table className="responsive-table w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
                 <tr>
                   <th className="px-5 py-3">Pipeline</th>
@@ -444,20 +444,20 @@ export const PipelinesPage: React.FC = () => {
                 {executions.length > 0 ? (
                   executions.map((exec) => (
                     <tr key={exec.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="px-5 py-3.5 font-medium text-white">
+                      <td data-label="Pipeline" className="px-5 py-3.5 font-medium text-white">
                         {exec.pipelineName}
                       </td>
-                      <td className="px-5 py-3.5">{getStatusBadge(exec.status)}</td>
-                      <td className="px-5 py-3.5 text-slate-400">
+                      <td data-label="Status" className="px-5 py-3.5">{getStatusBadge(exec.status)}</td>
+                      <td data-label="Triggered By" className="px-5 py-3.5 text-slate-400">
                         {exec.triggeredBy} ({exec.triggerType})
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-slate-400">
+                      <td data-label="Started At" className="px-5 py-3.5 font-mono text-slate-400">
                         {new Date(exec.startTime).toLocaleString()}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-slate-300">
+                      <td data-label="Duration" className="px-5 py-3.5 font-mono text-slate-300">
                         {exec.durationMs != null ? `${(exec.durationMs / 1000).toFixed(2)}s` : 'Running...'}
                       </td>
-                      <td className="px-5 py-3.5 text-right">
+                      <td data-label="Actions" className="px-5 py-3.5 text-right">
                         <Button
                           variant="outline"
                           size="sm"

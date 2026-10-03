@@ -42,7 +42,7 @@ export const AuditLogsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <FileText className="w-6 h-6 text-primary" />
             บันทึกกิจกรรมระบบ (Audit Logs)
           </h1>
@@ -65,8 +65,8 @@ export const AuditLogsPage: React.FC = () => {
 
       {/* Filter */}
       <Card className="border-slate-800 bg-slate-900/60 shadow-sm">
-        <CardContent className="p-4 flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="relative w-full flex-1 sm:max-w-sm">
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
             <Input
               value={username}
@@ -79,7 +79,7 @@ export const AuditLogsPage: React.FC = () => {
             />
           </div>
 
-          <div className="relative flex-1 max-w-sm">
+          <div className="relative w-full flex-1 sm:max-w-sm">
             <Input
               value={action}
               onChange={(e) => {
@@ -95,8 +95,8 @@ export const AuditLogsPage: React.FC = () => {
 
       {/* Logs Table */}
       <Card className="border-slate-800 bg-slate-900/90 shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+        <div className="md:overflow-x-auto">
+          <table className="responsive-table w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
                 <th className="py-3.5 px-4 font-semibold">เวลา (Timestamp)</th>
@@ -123,19 +123,19 @@ export const AuditLogsPage: React.FC = () => {
               ) : (
                 data.content.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-4 text-slate-400">
+                    <td data-label="Timestamp" className="py-3 px-4 text-slate-400">
                       {new Date(log.createdAt).toLocaleString('th-TH')}
                     </td>
-                    <td className="py-3 px-4 text-white font-semibold font-sans">
+                    <td data-label="User" className="py-3 px-4 text-white font-semibold font-sans">
                       {log.username || 'ANONYMOUS'}
                     </td>
-                    <td className="py-3 px-4 font-sans">
+                    <td data-label="Action" className="py-3 px-4 font-sans">
                       {renderActionBadge(log.action)}
                     </td>
-                    <td className="py-3 px-4 text-slate-400">
+                    <td data-label="IP Address" className="py-3 px-4 text-slate-400">
                       {log.ipAddress || '-'}
                     </td>
-                    <td className="py-3 px-4 text-slate-300 font-sans">
+                    <td data-label="Details" className="py-3 px-4 text-slate-300 font-sans">
                       {log.details || '-'}
                     </td>
                   </tr>

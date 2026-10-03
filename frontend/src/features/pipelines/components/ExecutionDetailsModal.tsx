@@ -121,7 +121,7 @@ export const ExecutionDetailsModal: React.FC<ExecutionDetailsModalProps> = ({
         </div>
 
         {/* Execution Summary Stats */}
-        <div className="grid grid-cols-4 gap-4 p-4 border-b border-slate-800/80 bg-slate-950/40 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 border-b border-slate-800/80 bg-slate-950/40 text-xs">
           <div>
             <span className="text-slate-500 block">Triggered By</span>
             <span className="text-slate-200 font-medium flex items-center gap-1 mt-0.5">

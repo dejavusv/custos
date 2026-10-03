@@ -76,7 +76,7 @@ export const LiveTerminal: React.FC<LiveTerminalProps> = ({
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-[#0c1017] shadow-2xl overflow-hidden flex flex-col h-[520px]">
+    <div className="rounded-xl border border-slate-800 bg-[#0c1017] shadow-2xl overflow-hidden flex flex-col h-[60vh] min-h-[320px] sm:h-[520px]">
       {/* Terminal Title Bar */}
       <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-900/90 border-b border-slate-800/80 gap-3">
         {/* Left: Window Dots & Title */}
@@ -140,7 +140,7 @@ export const LiveTerminal: React.FC<LiveTerminalProps> = ({
       {/* Terminal Toolbar: Search, Level Filter, Auto-scroll */}
       <div className="flex flex-wrap items-center justify-between px-4 py-2 bg-slate-900/40 border-b border-slate-800/60 gap-2.5 text-xs">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
+        <div className="relative flex-1 min-w-[160px] max-w-sm">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
@@ -152,7 +152,7 @@ export const LiveTerminal: React.FC<LiveTerminalProps> = ({
         </div>
 
         {/* Level Filters & Auto-scroll */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center bg-slate-950/80 border border-slate-800 rounded-md p-0.5">
             {['ALL', 'INFO', 'WARN', 'ERROR', 'DEBUG'].map((level) => (
               <button

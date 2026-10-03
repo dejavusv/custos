@@ -84,7 +84,7 @@ export const DashboardPage: React.FC = () => {
       <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-800 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="text-xs text-slate-500">v1.0.0-SNAPSHOT</span>
-          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight mt-1">
             ยินดีต้อนรับสู่ Custos Platform, {user?.username}
           </h1>
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
@@ -115,7 +115,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Pipelines Overview */}
       <Card className="border-slate-800 bg-slate-900/80 shadow-md overflow-hidden">
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <CardHeader className="flex flex-col sm:flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="text-lg text-white flex items-center gap-2">
               <Workflow className="w-5 h-5 text-primary" />
@@ -136,8 +136,8 @@ export const DashboardPage: React.FC = () => {
             </div>
           </div>
         </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+        <div className="md:overflow-x-auto">
+          <table className="responsive-table w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-y border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
                 <th className="py-3 px-4 font-semibold">Pipeline</th>
@@ -158,25 +158,27 @@ export const DashboardPage: React.FC = () => {
               ) : (
                 summary.pipelines.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-4">
-                      <p className="text-white font-semibold">{p.name}</p>
-                      <p className="text-xs text-slate-500 font-mono">{p.cronExpression || 'Manual'}</p>
+                    <td data-label="Pipeline" className="py-3 px-4">
+                      <div>
+                        <p className="text-white font-semibold">{p.name}</p>
+                        <p className="text-xs text-slate-500 font-mono">{p.cronExpression || 'Manual'}</p>
+                      </div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td data-label="สถานะ" className="py-3 px-4">
                       {p.active ? (
                         <Badge variant="success">Active</Badge>
                       ) : (
                         <Badge variant="secondary">Paused</Badge>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-slate-300">
+                    <td data-label="ทำงานล่าสุด" className="py-3 px-4 text-slate-300">
                       {p.lastRunAt ? formatDateTime(p.lastRunAt) : <span className="text-slate-500">ยังไม่เคยรัน</span>}
                     </td>
-                    <td className="py-3 px-4">
+                    <td data-label="ผลการรัน" className="py-3 px-4">
                       {p.lastStatus ? <ExecutionStatusBadge status={p.lastStatus} /> : <span className="text-slate-600">-</span>}
                     </td>
-                    <td className="py-3 px-4 text-slate-400 font-mono text-xs">{formatDuration(p.lastDurationMs)}</td>
-                    <td className="py-3 px-4 text-slate-400">{formatDateTime(p.nextFireTime)}</td>
+                    <td data-label="ระยะเวลา" className="py-3 px-4 text-slate-400 font-mono text-xs">{formatDuration(p.lastDurationMs)}</td>
+                    <td data-label="รอบถัดไป" className="py-3 px-4 text-slate-400">{formatDateTime(p.nextFireTime)}</td>
                   </tr>
                 ))
               )}
@@ -187,7 +189,7 @@ export const DashboardPage: React.FC = () => {
 
       {/* Execution History */}
       <Card className="border-slate-800 bg-slate-900/80 shadow-md overflow-hidden">
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <CardHeader className="flex flex-col sm:flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="text-lg text-white flex items-center gap-2">
               <History className="w-5 h-5 text-primary" />
@@ -199,8 +201,8 @@ export const DashboardPage: React.FC = () => {
             ดูทั้งหมด
           </Link>
         </CardHeader>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+        <div className="md:overflow-x-auto">
+          <table className="responsive-table w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-y border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
                 <th className="py-3 px-4 font-semibold">Pipeline</th>
@@ -220,16 +222,16 @@ export const DashboardPage: React.FC = () => {
               ) : (
                 summary.recentExecutions.map((exec) => (
                   <tr key={exec.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3 px-4 text-white font-semibold">{exec.pipelineName}</td>
-                    <td className="py-3 px-4">
+                    <td data-label="Pipeline" className="py-3 px-4 text-white font-semibold">{exec.pipelineName}</td>
+                    <td data-label="สถานะ" className="py-3 px-4">
                       <ExecutionStatusBadge status={exec.status} />
                     </td>
-                    <td className="py-3 px-4 text-slate-400">
+                    <td data-label="Triggered By" className="py-3 px-4 text-slate-400">
                       {exec.triggeredBy}
                       <span className="ml-2 text-[10px] text-slate-600 uppercase">{exec.triggerType}</span>
                     </td>
-                    <td className="py-3 px-4 text-slate-300">{formatDateTime(exec.startTime)}</td>
-                    <td className="py-3 px-4 text-slate-400 font-mono text-xs">{formatDuration(exec.durationMs)}</td>
+                    <td data-label="เวลาเริ่ม" className="py-3 px-4 text-slate-300">{formatDateTime(exec.startTime)}</td>
+                    <td data-label="ระยะเวลา" className="py-3 px-4 text-slate-400 font-mono text-xs">{formatDuration(exec.durationMs)}</td>
                   </tr>
                 ))
               )}
@@ -241,7 +243,7 @@ export const DashboardPage: React.FC = () => {
       {/* Audit Logs (ADMIN only) */}
       {isAdmin && (
         <Card className="border-slate-800 bg-slate-900/80 shadow-md overflow-hidden">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <CardHeader className="flex flex-col sm:flex-row items-start justify-between gap-4">
             <div>
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
@@ -255,8 +257,8 @@ export const DashboardPage: React.FC = () => {
               ดูทั้งหมด
             </Link>
           </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+          <div className="md:overflow-x-auto">
+            <table className="responsive-table w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="border-y border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
                   <th className="py-3 px-4 font-semibold">เวลา</th>
@@ -276,11 +278,11 @@ export const DashboardPage: React.FC = () => {
                 ) : (
                   auditQuery.data.content.map((log) => (
                     <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-3 px-4 text-slate-400">{formatDateTime(log.createdAt)}</td>
-                      <td className="py-3 px-4 text-white font-semibold">{log.username || 'ANONYMOUS'}</td>
-                      <td className="py-3 px-4">{renderActionBadge(log.action)}</td>
-                      <td className="py-3 px-4 text-slate-300">{log.targetResource || '-'}</td>
-                      <td className="py-3 px-4 text-slate-400 font-mono text-xs">{log.ipAddress || '-'}</td>
+                      <td data-label="เวลา" className="py-3 px-4 text-slate-400">{formatDateTime(log.createdAt)}</td>
+                      <td data-label="ผู้ใช้งาน" className="py-3 px-4 text-white font-semibold">{log.username || 'ANONYMOUS'}</td>
+                      <td data-label="กิจกรรม" className="py-3 px-4">{renderActionBadge(log.action)}</td>
+                      <td data-label="Resource" className="py-3 px-4 text-slate-300">{log.targetResource || '-'}</td>
+                      <td data-label="IP Address" className="py-3 px-4 text-slate-400 font-mono text-xs">{log.ipAddress || '-'}</td>
                     </tr>
                   ))
                 )}

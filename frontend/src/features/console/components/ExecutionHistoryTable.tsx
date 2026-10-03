@@ -95,9 +95,9 @@ export const ExecutionHistoryTable: React.FC<ExecutionHistoryTableProps> = ({
       {/* Search & Filter Header */}
       <Card className="border-slate-800 bg-slate-900/60 shadow-sm">
         <CardContent className="p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex flex-1 items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-1 flex-wrap items-center gap-3 w-full sm:w-auto">
             {/* Search Input */}
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 min-w-[180px] sm:max-w-sm">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
               <input
                 type="text"
@@ -109,7 +109,7 @@ export const ExecutionHistoryTable: React.FC<ExecutionHistoryTableProps> = ({
             </div>
 
             {/* Status Filter Buttons */}
-            <div className="hidden md:flex items-center bg-slate-950 border border-slate-800 rounded-md p-0.5 text-xs">
+            <div className="flex flex-wrap items-center bg-slate-950 border border-slate-800 rounded-md p-0.5 text-xs">
               {['ALL', 'SUCCESS', 'RUNNING', 'FAILED', 'ABORTED'].map((st) => (
                 <button
                   key={st}
@@ -142,8 +142,8 @@ export const ExecutionHistoryTable: React.FC<ExecutionHistoryTableProps> = ({
 
       {/* Execution Table */}
       <Card className="border-slate-800 bg-slate-900/40 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
+        <div className="md:overflow-x-auto">
+          <table className="responsive-table w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-900/90 text-xs font-semibold uppercase text-slate-400 border-b border-slate-800">
               <tr>
                 <th className="px-4 py-3">Pipeline</th>
@@ -180,45 +180,49 @@ export const ExecutionHistoryTable: React.FC<ExecutionHistoryTableProps> = ({
                       }`}
                     >
                       {/* Pipeline Name */}
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-white flex items-center gap-2">
-                          <span>{exec.pipelineName || 'Pipeline'}</span>
-                          {isSelected && (
-                            <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">
-                              ACTIVE CONSOLE
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-500 font-mono">
-                          ID: {exec.id.substring(0, 13)}...
+                      <td data-label="Pipeline" className="px-4 py-3">
+                        <div>
+                          <div className="font-medium text-white flex flex-wrap items-center gap-2">
+                            <span>{exec.pipelineName || 'Pipeline'}</span>
+                            {isSelected && (
+                              <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-mono font-semibold">
+                                ACTIVE CONSOLE
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono">
+                            ID: {exec.id.substring(0, 13)}...
+                          </div>
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3">{getStatusBadge(exec.status)}</td>
+                      <td data-label="Status" className="px-4 py-3">{getStatusBadge(exec.status)}</td>
 
                       {/* Triggered By */}
-                      <td className="px-4 py-3">
-                        <div className="text-slate-300 font-medium">
-                          {exec.triggeredBy || 'system'}
+                      <td data-label="Triggered By" className="px-4 py-3">
+                        <div>
+                          <div className="text-slate-300 font-medium">
+                            {exec.triggeredBy || 'system'}
+                          </div>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {exec.triggerType}
+                          </span>
                         </div>
-                        <span className="text-[11px] text-slate-500 font-mono">
-                          {exec.triggerType}
-                        </span>
                       </td>
 
                       {/* Start Time */}
-                      <td className="px-4 py-3 whitespace-nowrap text-xs text-slate-300">
+                      <td data-label="Start Time" className="px-4 py-3 whitespace-nowrap text-xs text-slate-300">
                         {new Date(exec.startTime).toLocaleString()}
                       </td>
 
                       {/* Duration */}
-                      <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-slate-300">
+                      <td data-label="Duration" className="px-4 py-3 whitespace-nowrap text-xs font-mono text-slate-300">
                         {formatDuration(exec.durationMs)}
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3 text-right whitespace-nowrap space-x-2">
+                      <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap space-x-2">
                         <Button
                           size="sm"
                           variant={isSelected ? 'default' : 'outline'}

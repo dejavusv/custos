@@ -118,7 +118,7 @@ export const UserManagementPage: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <Users className="w-6 h-6 text-primary" />
             การจัดการผู้ใช้งาน (User Management)
           </h1>
@@ -138,8 +138,8 @@ export const UserManagementPage: React.FC = () => {
       {/* Filter and Search Bar */}
       <Card className="border-slate-800 bg-slate-900/60 backdrop-blur-md shadow-sm">
         <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex flex-1 items-center gap-3 w-full sm:w-auto">
-            <div className="relative flex-1 max-w-sm">
+          <div className="flex flex-1 flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex-1 min-w-[180px] sm:max-w-sm">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
               <Input
                 value={search}
@@ -182,8 +182,8 @@ export const UserManagementPage: React.FC = () => {
 
       {/* Users Table */}
       <Card className="border-slate-800 bg-slate-900/90 shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
+        <div className="md:overflow-x-auto">
+          <table className="responsive-table w-full text-left border-collapse text-sm">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
                 <th className="py-3.5 px-4 font-semibold">ผู้ใช้งาน (User)</th>
@@ -210,9 +210,9 @@ export const UserManagementPage: React.FC = () => {
               ) : (
                 data.content.map((user) => (
                   <tr key={user.id} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="py-3.5 px-4">
+                    <td data-label="User" className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+                        <div className="w-8 h-8 shrink-0 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs">
                           {user.username.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -221,12 +221,12 @@ export const UserManagementPage: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td data-label="Roles" className="py-3.5 px-4">
                       <div className="flex flex-wrap gap-1.5">
                         {user.roles.map((r) => renderRoleBadge(r))}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td data-label="Status" className="py-3.5 px-4">
                       <div className="space-y-1">
                         {renderStatusBadge(user.status)}
                         {user.failedLoginAttempts > 0 && user.status !== 'LOCKED' && (
@@ -237,10 +237,10 @@ export const UserManagementPage: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-400 font-mono">
+                    <td data-label="Last Login" className="py-3.5 px-4 text-xs text-slate-400 font-mono">
                       {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('th-TH') : 'ยังไม่เคยเข้าสู่ระบบ'}
                     </td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td data-label="Actions" className="py-3.5 px-4 text-right">
                       {isSuperAdmin && (
                         <div className="flex items-center justify-end gap-1">
                           {/* Toggle status button */}

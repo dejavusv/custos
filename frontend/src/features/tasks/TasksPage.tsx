@@ -282,7 +282,7 @@ export const TasksPage: React.FC = () => {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
           <HardDrive className="w-6 h-6 text-primary" />
           Task & Backup Engine Hub
         </h1>
@@ -990,8 +990,8 @@ export const TasksPage: React.FC = () => {
                   </span>
                 </div>
               </CardHeader>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="md:overflow-x-auto">
+                <table className="responsive-table w-full text-xs text-left">
                   <thead className="bg-secondary/40 text-muted-foreground uppercase border-b border-border">
                     <tr>
                       <th className="px-4 py-2.5">Part #</th>
@@ -1004,13 +1004,13 @@ export const TasksPage: React.FC = () => {
                   <tbody className="divide-y divide-border">
                     {splitManifest.chunks.map((chunk) => (
                       <tr key={chunk.partNumber} className="hover:bg-secondary/20">
-                        <td className="px-4 py-2.5 font-bold">#{chunk.partNumber}</td>
-                        <td className="px-4 py-2.5 font-mono text-foreground">{chunk.fileName}</td>
-                        <td className="px-4 py-2.5">{formatBytes(chunk.sizeBytes)}</td>
-                        <td className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
+                        <td data-label="Part #" className="px-4 py-2.5 font-bold">#{chunk.partNumber}</td>
+                        <td data-label="Chunk File" className="px-4 py-2.5 font-mono text-foreground">{chunk.fileName}</td>
+                        <td data-label="ขนาด" className="px-4 py-2.5">{formatBytes(chunk.sizeBytes)}</td>
+                        <td data-label="SHA-256" className="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
                           {chunk.checksumSha256}
                         </td>
-                        <td className="px-4 py-2.5 text-right">
+                        <td data-label="สถานะ" className="px-4 py-2.5 text-right">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                             READY
                           </span>

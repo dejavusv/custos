@@ -136,7 +136,7 @@ export const CredentialsPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <KeyRound className="w-6 h-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
               Credentials Vault
             </h1>
           </div>
@@ -187,7 +187,7 @@ export const CredentialsPage: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
               {[
                 { id: '', label: 'ทั้งหมด' },
                 { id: 'DATABASE_POSTGRESQL', label: 'PostgreSQL' },
@@ -219,8 +219,8 @@ export const CredentialsPage: React.FC = () => {
 
       {/* Data Table */}
       <Card className="border-border bg-card shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+        <div className="md:overflow-x-auto">
+          <table className="responsive-table w-full text-sm text-left">
             <thead className="bg-secondary/30 text-xs font-semibold text-muted-foreground uppercase border-b border-border">
               <tr>
                 <th className="px-5 py-3">ชื่อ Profile</th>
@@ -249,7 +249,7 @@ export const CredentialsPage: React.FC = () => {
               ) : (
                 data.content.map((item) => (
                   <tr key={item.id} className="hover:bg-secondary/20 transition-colors">
-                    <td className="px-5 py-3.5">
+                    <td data-label="ชื่อ Profile" className="px-5 py-3.5">
                       <div className="font-semibold text-foreground">{item.name}</div>
                       {item.description && (
                         <div className="text-xs text-muted-foreground mt-0.5">
@@ -257,11 +257,11 @@ export const CredentialsPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-3.5">{getTypeBadge(item)}</td>
-                    <td className="px-5 py-3.5 font-mono text-xs text-muted-foreground">
+                    <td data-label="ประเภท" className="px-5 py-3.5">{getTypeBadge(item)}</td>
+                    <td data-label="Host & Port" className="px-5 py-3.5 font-mono text-xs text-muted-foreground">
                       {item.host ? `${item.host}:${item.port || '-'}` : '-'}
                     </td>
-                    <td className="px-5 py-3.5 text-xs">
+                    <td data-label="Database / User" className="px-5 py-3.5 text-xs">
                       {item.databaseName && (
                         <span className="font-semibold text-foreground">
                           {item.databaseName}
@@ -274,7 +274,7 @@ export const CredentialsPage: React.FC = () => {
                       )}
                       {!item.databaseName && !item.username && '-'}
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td data-label="ความปลอดภัย" className="px-5 py-3.5">
                       <div className="flex items-center gap-1.5">
                         <Badge
                           variant="secondary"
@@ -292,7 +292,7 @@ export const CredentialsPage: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-right">
+                    <td data-label="การจัดการ" className="px-5 py-3.5 text-right">
                       {isSuperAdmin ? (
                         <div className="flex items-center justify-end gap-1">
                           <Button
