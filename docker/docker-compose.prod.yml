@@ -69,6 +69,8 @@ services:
       GOOGLE_DRIVE_OAUTH_CLIENT_ID: ${GOOGLE_DRIVE_OAUTH_CLIENT_ID:-}
       GOOGLE_DRIVE_OAUTH_CLIENT_SECRET: ${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET:-}
       GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: ${GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN:-}
+      # network ที่อนุญาตให้ browse container (คั่นด้วย comma) ว่าง = ทุก network ที่ backend join อยู่
+      CUSTOS_DOCKER_NETWORKS: ${CUSTOS_DOCKER_NETWORKS:-}
     # Docker Engine API สำหรับเลือก container แล้ว browse/backup ไฟล์ในหน้า Task & Backup Engine Hub
     # โค้ดเรียกใช้แบบอ่านอย่างเดียว (list/inspect/ls/archive) แต่ docker.sock ให้สิทธิ์สูงมาก
     # ถ้าไม่ต้องการฟีเจอร์นี้ให้ลบ volume + group_add ออก และตั้ง CUSTOS_DOCKER_ENABLED=false
@@ -79,6 +81,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - custos-network
+      # join network ของ stack อื่น (เช่น ccenter) เพื่อให้ Docker Hub มองเห็น container ในนั้น
+      - shared-app-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -108,6 +112,9 @@ services:
 networks:
   custos-network:
     driver: bridge
+  # สร้างไว้แล้วโดย stack อื่น (ccenter) ถ้ายังไม่มี: docker network create shared-app-net
+  shared-app-net:
+    external: true
 
 volumes:
   postgres_prod_data:
