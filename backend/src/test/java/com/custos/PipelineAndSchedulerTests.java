@@ -346,4 +346,111 @@ public class PipelineAndSchedulerTests {
         Assertions.assertNull(updatedByKey.get("dump").getOnFailureNodeId());
         Assertions.assertEquals(2, pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(created.getId()).size());
     }
+
+    private StepNodeDto controlNode(String key, TaskType type, int order, String successKey, String failureKey) {
+        return StepNodeDto.builder().nodeKey(key).nodeLabel(key).nodeType(type).stepOrder(order)
+                .onSuccessNodeKey(successKey).onFailureNodeKey(failureKey).build();
+    }
+
+    private PipelineDetailResponse savePipelineWith(String namePrefix, StepNodeDto... nodes) {
+        SavePipelineRequest request = new SavePipelineRequest();
+        request.setName(namePrefix + UUID.randomUUID());
+        request.setNodes(new ArrayList<>(List.of(nodes)));
+        return pipelineService.savePipeline(request, null, new MockHttpServletRequest());
+    }
+
+    private StepNodeDto fileBackupNode(String key, int order, String sourcePath, String destDir, String successKey, String failureKey) {
+        return StepNodeDto.builder().nodeKey(key).nodeLabel(key).nodeType(TaskType.FILE_BACKUP).stepOrder(order)
+                .configOverrideJson(String.format("{\"sourcePath\":\"%s\",\"destinationDir\":\"%s\"}",
+                        sourcePath.replace("\\", "\\\\"), destDir.replace("\\", "\\\\")))
+                .onSuccessNodeKey(successKey).onFailureNodeKey(failureKey).build();
+    }
+
+    @Test
+    @DisplayName("Start/Stop - a pipeline can have only one Start node")
+    public void testSaveRejectsMultipleStartNodes() {
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class, () -> savePipelineWith("Two Starts ",
+                controlNode("start", TaskType.START, 1, "start2", null),
+                controlNode("start2", TaskType.START, 2, null, null)));
+    }
+
+    @Test
+    @DisplayName("Start/Stop - Start cannot be a connection target and Stop cannot have outgoing connections")
+    public void testSaveRejectsInvalidStartStopEdges() {
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class, () -> savePipelineWith("Into Start ",
+                controlNode("start", TaskType.START, 1, "stop", null),
+                controlNode("stop", TaskType.STOP, 2, "start", null)));
+        Assertions.assertThrows(com.custos.shared.BadRequestException.class, () -> savePipelineWith("Out of Stop ",
+                controlNode("start", TaskType.START, 1, "stop", null),
+                controlNode("stop", TaskType.STOP, 2, null, null),
+                StepNodeDto.builder().nodeKey("after").nodeLabel("after").nodeType(TaskType.EMAIL_ALERT).stepOrder(3).build(),
+                controlNode("stop2", TaskType.STOP, 4, "after", null)));
+    }
+
+    @Test
+    @DisplayName("Start/Stop - Start -> step -> Stop runs in order and finishes SUCCESS; nodes after Stop are not run")
+    public void testStartStopSuccessFlow(@TempDir Path tempDir) throws Exception {
+        File sourceDir = tempDir.resolve("src").toFile();
+        sourceDir.mkdirs();
+        try (FileWriter writer = new FileWriter(new File(sourceDir, "data.txt"))) {
+            writer.write("ok");
+        }
+        File destDir = tempDir.resolve("out").toFile();
+        destDir.mkdirs();
+
+        PipelineDetailResponse saved = savePipelineWith("Start Stop Success ",
+                controlNode("start", TaskType.START, 1, "backup", null),
+                fileBackupNode("backup", 2, sourceDir.getAbsolutePath(), destDir.getAbsolutePath(), "stop", null),
+                controlNode("stop", TaskType.STOP, 3, null, null),
+                // อิสระ ไม่มีเส้นชี้เข้า — ต้องไม่ถูกรันหลังจาก Stop
+                StepNodeDto.builder().nodeKey("orphan").nodeLabel("orphan").nodeType(TaskType.EMAIL_ALERT).stepOrder(4).build());
+
+        PipelineExecution execution = dagPipelineOrchestrator.executePipeline(saved.getId(), "TEST_RUNNER", TriggerType.MANUAL);
+
+        Assertions.assertEquals(ExecutionStatus.SUCCESS, execution.getStatus());
+        List<String> executedSteps = stepExecutionLogRepository.findByExecutionIdOrderByStartTimeAsc(execution.getId())
+                .stream().map(StepExecutionLog::getStepName).toList();
+        Assertions.assertEquals(List.of("start", "backup", "stop"), executedSteps);
+    }
+
+    @Test
+    @DisplayName("Start/Stop - failure routed to a Stop node ends the pipeline as FAILED and exposes the error message")
+    public void testStopViaFailureBranchFailsPipeline(@TempDir Path tempDir) {
+        PipelineDetailResponse saved = savePipelineWith("Start Stop Failure ",
+                controlNode("start", TaskType.START, 1, "backup", null),
+                fileBackupNode("backup", 2, tempDir.resolve("missing_folder").toString(), tempDir.toString(), "stopOk", "alert"),
+                StepNodeDto.builder().nodeKey("alert").nodeLabel("alert").nodeType(TaskType.EMAIL_ALERT).stepOrder(3)
+                        .configOverrideJson("{\"recipient\":\"alerts@example.com\"}").onSuccessNodeKey("stopFailed").build(),
+                controlNode("stopOk", TaskType.STOP, 4, null, null),
+                controlNode("stopFailed", TaskType.STOP, 5, null, null));
+
+        PipelineExecution execution = dagPipelineOrchestrator.executePipeline(saved.getId(), "TEST_RUNNER", TriggerType.MANUAL);
+
+        Assertions.assertEquals(ExecutionStatus.FAILED, execution.getStatus());
+        Assertions.assertNotNull(execution.getErrorMessage());
+        List<String> executedSteps = stepExecutionLogRepository.findByExecutionIdOrderByStartTimeAsc(execution.getId())
+                .stream().map(StepExecutionLog::getStepName).toList();
+        Assertions.assertEquals(List.of("start", "backup", "alert", "stopFailed"), executedSteps);
+        Assertions.assertTrue(execution.getContextDataJson().contains("backup.error_message"));
+        Assertions.assertTrue(execution.getContextDataJson().contains("last_error_message"));
+    }
+
+    @Test
+    @DisplayName("Start/Stop - pipelines without a Start node still run (legacy)")
+    public void testLegacyPipelineWithoutStartStillRuns(@TempDir Path tempDir) throws Exception {
+        File sourceDir = tempDir.resolve("src").toFile();
+        sourceDir.mkdirs();
+        try (FileWriter writer = new FileWriter(new File(sourceDir, "data.txt"))) {
+            writer.write("ok");
+        }
+        File destDir = tempDir.resolve("out").toFile();
+        destDir.mkdirs();
+
+        PipelineDetailResponse saved = savePipelineWith("Legacy No Start ",
+                fileBackupNode("backup", 1, sourceDir.getAbsolutePath(), destDir.getAbsolutePath(), null, null));
+
+        PipelineExecution execution = dagPipelineOrchestrator.executePipeline(saved.getId(), "TEST_RUNNER", TriggerType.MANUAL);
+
+        Assertions.assertEquals(ExecutionStatus.SUCCESS, execution.getStatus());
+    }
 }

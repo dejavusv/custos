@@ -78,6 +78,11 @@ public class PipelineService {
             }
         }
 
+        long startCount = dtos.stream().filter(d -> d.getNodeType() == TaskType.START).count();
+        if (startCount > 1) {
+            throw new BadRequestException("A pipeline can have only one Start node");
+        }
+
         // Upsert: Node เดิมอัปเดตในที่ (คง ID ไว้ให้ประวัติการรันยังอ้างถึงได้), Node ใหม่ให้ DB สร้าง ID เอง
         List<PipelineStepNode> existingNodes = pipelineStepNodeRepository.findByPipelineIdOrderByStepOrderAsc(pipeline.getId());
         Map<UUID, PipelineStepNode> existingById = new HashMap<>();
@@ -119,6 +124,22 @@ public class PipelineService {
             PipelineStepNode node = nodeEntities.get(i);
             node.setOnSuccessNodeId(resolveEdgeTarget(dto.getOnSuccessNodeKey(), dto.getOnSuccessNodeId(), keyToNodeMap, savedIds));
             node.setOnFailureNodeId(resolveEdgeTarget(dto.getOnFailureNodeKey(), dto.getOnFailureNodeId(), keyToNodeMap, savedIds));
+        }
+
+        // Start ต้องไม่มีเส้นเข้า, Stop ต้องไม่มีเส้นออก
+        Set<UUID> startIds = nodeEntities.stream()
+                .filter(n -> n.getNodeType() == TaskType.START)
+                .map(PipelineStepNode::getId)
+                .collect(Collectors.toSet());
+        for (PipelineStepNode node : nodeEntities) {
+            if (node.getNodeType() == TaskType.STOP
+                    && (node.getOnSuccessNodeId() != null || node.getOnFailureNodeId() != null)) {
+                throw new BadRequestException("Stop node cannot have outgoing connections: " + node.getNodeKey());
+            }
+            if ((node.getOnSuccessNodeId() != null && startIds.contains(node.getOnSuccessNodeId()))
+                    || (node.getOnFailureNodeId() != null && startIds.contains(node.getOnFailureNodeId()))) {
+                throw new BadRequestException("Start node cannot be the target of a connection (from " + node.getNodeKey() + ")");
+            }
         }
 
         // Validate cycles

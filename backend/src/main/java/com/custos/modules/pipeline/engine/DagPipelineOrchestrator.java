@@ -97,12 +97,21 @@ public class DagPipelineOrchestrator {
             if (node.getOnFailureNodeId() != null) targetNodes.add(node.getOnFailureNodeId());
         }
 
-        // Identify starting root node (first node that is not a target of another node, or min stepOrder)
+        // Identify starting node: explicit START node if present, otherwise (legacy pipelines)
+        // the first node that is not a target of another node, or min stepOrder
         PipelineStepNode currentNode = null;
         for (PipelineStepNode node : nodes) {
-            if (!targetNodes.contains(node.getId())) {
+            if (node.getNodeType() == TaskType.START) {
                 currentNode = node;
                 break;
+            }
+        }
+        if (currentNode == null) {
+            for (PipelineStepNode node : nodes) {
+                if (!targetNodes.contains(node.getId())) {
+                    currentNode = node;
+                    break;
+                }
             }
         }
         if (currentNode == null) {
@@ -111,6 +120,10 @@ public class DagPipelineOrchestrator {
 
         boolean pipelineFailed = false;
         String failureReason = null;
+        // true เมื่อ flow ถูก route ผ่านเส้น On Failure แล้ว (ใช้ตัดสินผลของ Stop node และชนิดอีเมลแจ้งเตือน)
+        boolean onFailureBranch = false;
+        String lastFailedStep = null;
+        String lastErrorMessage = null;
         Set<UUID> executedNodeIds = new HashSet<>();
 
         while (currentNode != null) {
@@ -143,7 +156,8 @@ public class DagPipelineOrchestrator {
 
             boolean stepSuccess = false;
             try {
-                executeStep(currentNode, context, stepLog, execution.getId());
+                executeStep(currentNode, context, stepLog, execution.getId(), onFailureBranch, pipeline.getName(),
+                        lastFailedStep, lastErrorMessage);
                 stepSuccess = true;
                 stepLog.setStatus(ExecutionStatus.SUCCESS);
                 progressBroadcaster.broadcastLog(execution.getId(), currentNode.getNodeLabel(), "SUCCESS",
@@ -153,13 +167,29 @@ public class DagPipelineOrchestrator {
                 stepSuccess = false;
                 stepLog.setStatus(ExecutionStatus.FAILED);
                 stepLog.setErrorMessage(e.getMessage());
-                failureReason = "Step failed: " + currentNode.getNodeLabel() + " - " + e.getMessage();
+                String errorText = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                failureReason = "Step failed: " + currentNode.getNodeLabel() + " - " + errorText;
+                lastFailedStep = currentNode.getNodeLabel();
+                lastErrorMessage = errorText;
+                // ให้ขั้นตอนบนกิ่ง On Failure อ้างอิง Error ของ Task ก่อนหน้าผ่าน ${nodeKey.error_message} / ${last_error_message}
+                context.setVariable(currentNode.getNodeKey() + ".error_message", errorText);
+                context.setVariable("last_error_message", errorText);
+                context.setVariable("last_failed_step", lastFailedStep);
                 progressBroadcaster.broadcastLog(execution.getId(), currentNode.getNodeLabel(), "ERROR",
                         "Step failed: " + e.getMessage());
             } finally {
                 stepLog.setEndTime(Instant.now());
                 stepLog.setDurationMs(Duration.between(stepLog.getStartTime(), stepLog.getEndTime()).toMillis());
                 stepExecutionLogRepository.save(stepLog);
+            }
+
+            // Stop node: จบ Pipeline ทันที — ถึงทางกิ่ง On Failure ถือว่า FAILED
+            if (stepSuccess && currentNode.getNodeType() == TaskType.STOP) {
+                if (onFailureBranch) {
+                    pipelineFailed = true;
+                }
+                currentNode = null;
+                continue;
             }
 
             // Routing logic
@@ -176,6 +206,7 @@ public class DagPipelineOrchestrator {
                 UUID failId = currentNode.getOnFailureNodeId();
                 if (failId != null && nodeMap.containsKey(failId) && !executedNodeIds.contains(failId)) {
                     log.warn("Routing step failure to on_failure branch: {}", failId);
+                    onFailureBranch = true;
                     currentNode = nodeMap.get(failId);
                 } else {
                     pipelineFailed = true;
@@ -220,10 +251,17 @@ public class DagPipelineOrchestrator {
         return null;
     }
 
-    private void executeStep(PipelineStepNode node, PipelineExecutionContext context, StepExecutionLog stepLog, UUID executionId) throws Exception {
+    private void executeStep(PipelineStepNode node, PipelineExecutionContext context, StepExecutionLog stepLog, UUID executionId,
+                             boolean onFailureBranch, String pipelineName, String failedStepName, String failedErrorMessage) throws Exception {
         Map<String, Object> config = parseConfig(node.getConfigOverrideJson());
 
         switch (node.getNodeType()) {
+            case START -> stepLog.setLogsText("Pipeline started");
+
+            case STOP -> stepLog.setLogsText(onFailureBranch
+                    ? "Pipeline stopped after failure branch"
+                    : "Pipeline stopped");
+
             case DATABASE_BACKUP -> {
                 CompressionFormat compFormat = CompressionFormat.GZIP;
                 if (config.get("compressionFormat") != null && !config.get("compressionFormat").toString().isBlank()) {
@@ -350,15 +388,28 @@ public class DagPipelineOrchestrator {
                 String recipient = context.resolvePlaceholders((String) config.getOrDefault("recipient", "admin@example.com"));
                 String subject = context.resolvePlaceholders((String) config.getOrDefault("subject", "Custos Pipeline Notification"));
 
-                String sesMsgId = notificationService.sendPipelineSuccessSummary(
-                        recipient,
-                        node.getNodeLabel(),
-                        stepLog.getDurationMs() != null ? stepLog.getDurationMs() : 1000L,
-                        context.getLastFileSize() != null ? context.getLastFileSize() : 0L,
-                        context.getLastChecksum(),
-                        1,
-                        context.getLastOutputPath()
-                );
+                String sesMsgId;
+                if (onFailureBranch) {
+                    // อยู่บนกิ่ง On Failure: ส่งอีเมลแจ้งความล้มเหลวพร้อม Error Message ของ Task ก่อนหน้า
+                    sesMsgId = notificationService.sendPipelineFailureAlert(
+                            recipient,
+                            pipelineName,
+                            failedStepName,
+                            null,
+                            failedErrorMessage,
+                            failedErrorMessage
+                    );
+                } else {
+                    sesMsgId = notificationService.sendPipelineSuccessSummary(
+                            recipient,
+                            node.getNodeLabel(),
+                            stepLog.getDurationMs() != null ? stepLog.getDurationMs() : 1000L,
+                            context.getLastFileSize() != null ? context.getLastFileSize() : 0L,
+                            context.getLastChecksum(),
+                            1,
+                            context.getLastOutputPath()
+                    );
+                }
 
                 stepLog.setLogsText("Dispatched email alert via AWS SES to: " + recipient + " | SES MessageId: " + sesMsgId);
                 stepLog.setAwsSesMessageId(sesMsgId);

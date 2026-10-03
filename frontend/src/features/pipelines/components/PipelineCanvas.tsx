@@ -27,9 +27,20 @@ import {
   AlertTriangle,
   HardDriveUpload,
   MessageSquare,
+  Square,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '../../../components/ui/Dialog';
+import { StartNode } from './nodes/StartNode';
+import { StopNode } from './nodes/StopNode';
 import { DatabaseBackupNode } from './nodes/DatabaseBackupNode';
 import { FileBackupNode } from './nodes/FileBackupNode';
 import { TransferNode } from './nodes/TransferNode';
@@ -59,6 +70,45 @@ const nodeTypes = {
   EMAIL_ALERT: NotificationNode,
   GOOGLE_DRIVE_UPLOAD: GoogleDriveNode,
   LINE_NOTIFY: LineNotifyNode,
+  START: StartNode,
+  STOP: StopNode,
+};
+
+type EdgeKind = 'success' | 'failure';
+
+const EDGE_LABEL: Record<EdgeKind, string> = {
+  success: 'On Success',
+  failure: 'On Failure',
+};
+
+// ตัวแปรที่ Backend เติมให้เมื่อ Task ล้มเหลว (ใช้ได้บนกิ่ง On Failure)
+const errorMessagePlaceholder = (nodeKey: string) => '${' + nodeKey + '.error_message}';
+
+const buildEdge = (connection: Connection, kind: EdgeKind): Edge => {
+  const color = kind === 'success' ? '#10b981' : '#ef4444';
+  return {
+    ...connection,
+    id: `edge-${connection.source}-${connection.target}-${kind}-${Date.now()}`,
+    label: EDGE_LABEL[kind],
+    style: {
+      stroke: color,
+      strokeWidth: 2,
+      strokeDasharray: kind === 'failure' ? '4 4' : undefined,
+    },
+    markerEnd: { type: MarkerType.ArrowClosed, color },
+  };
+};
+
+const LEGACY_START_ID = 'node-start';
+
+// Node ต้นทางของ Pipeline เดิม: Node แรก (ตาม stepOrder) ที่ไม่มีเส้นใดชี้เข้า
+const findRootNode = (nodes: StepNodeDto[]): StepNodeDto | undefined => {
+  const targets = new Set<string>();
+  for (const n of nodes) {
+    if (n.onSuccessNodeId) targets.add(n.onSuccessNodeId);
+    if (n.onFailureNodeId) targets.add(n.onFailureNodeId);
+  }
+  return nodes.find((n) => !targets.has(n.id || n.nodeKey)) ?? nodes[0];
 };
 
 export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
@@ -75,6 +125,9 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // เส้นเชื่อมที่รอผู้ใช้เลือกชนิด (On Success / On Failed)
+  const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
+
   // Modal State
   const [editingNode, setEditingNode] = useState<{
     id: string;
@@ -87,7 +140,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
   // Initial nodes setup
   const initialNodes: Node[] = useMemo(() => {
     if (initialPipeline && initialPipeline.nodes && initialPipeline.nodes.length > 0) {
-      return initialPipeline.nodes.map((n) => ({
+      const loaded: Node[] = initialPipeline.nodes.map((n) => ({
         id: n.id || n.nodeKey,
         type: n.nodeType,
         position: { x: n.positionX || 150, y: n.positionY || 100 },
@@ -106,10 +159,30 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           },
         },
       }));
+
+      // Pipeline เดิมที่ยังไม่มี Start: เติมให้อัตโนมัติ เหนือ Node ต้นทาง (บันทึกเมื่อผู้ใช้กด Save)
+      if (!initialPipeline.nodes.some((n) => n.nodeType === 'START')) {
+        const rootNode = findRootNode(initialPipeline.nodes);
+        if (rootNode) {
+          loaded.unshift({
+            id: LEGACY_START_ID,
+            type: 'START',
+            position: { x: rootNode.positionX || 150, y: (rootNode.positionY || 100) - 120 },
+            data: { label: 'Start', nodeKey: 'start' },
+          });
+        }
+      }
+      return loaded;
     }
 
     // Default template nodes
     return [
+      {
+        id: 'node-start',
+        type: 'START',
+        position: { x: 100, y: -40 },
+        data: { label: 'Start', nodeKey: 'start' },
+      },
       {
         id: 'node-db-dump',
         type: 'DATABASE_BACKUP',
@@ -142,6 +215,12 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           recipient: 'devops@company.com',
         },
       },
+      {
+        id: 'node-stop',
+        type: 'STOP',
+        position: { x: 100, y: 600 },
+        data: { label: 'Stop', nodeKey: 'stop' },
+      },
     ];
   }, [initialPipeline]);
 
@@ -172,10 +251,34 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           });
         }
       }
+      if (!initialPipeline.nodes.some((n) => n.nodeType === 'START')) {
+        const rootNode = findRootNode(initialPipeline.nodes);
+        if (rootNode) {
+          edges.unshift(
+            buildEdge({ source: LEGACY_START_ID, target: rootNode.id || rootNode.nodeKey, sourceHandle: null, targetHandle: null }, 'success')
+          );
+        }
+      }
       return edges;
     }
 
     return [
+      {
+        id: 'edge-0-1',
+        source: 'node-start',
+        target: 'node-db-dump',
+        label: 'On Success',
+        style: { stroke: '#10b981', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981' },
+      },
+      {
+        id: 'edge-3-4',
+        source: 'node-notify',
+        target: 'node-stop',
+        label: 'On Success',
+        style: { stroke: '#10b981', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#10b981' },
+      },
       {
         id: 'edge-1-2',
         source: 'node-db-dump',
@@ -228,36 +331,80 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
     }));
   }, [nodes, handleDeleteNode]);
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      const isFailure = window.confirm(
-        'Connect as "On Success" branch (green)?\n\nClick OK for "On Success", or Cancel for "On Failure" (red)!'
+  // เพิ่มเส้นเชื่อม — แต่ละ Node มีได้เส้นละชนิด (On Success / On Failure) ชนิดละ 1 เส้น จึงแทนที่เส้นชนิดเดิมของ Node ต้นทาง
+  const applyEdge = useCallback(
+    (connection: Connection, kind: EdgeKind) => {
+      setEdges((eds) =>
+        addEdge(
+          buildEdge(connection, kind),
+          eds.filter((e) => !(e.source === connection.source && e.label === EDGE_LABEL[kind]))
+        )
       );
-
-      const newEdge: Edge = {
-        ...connection,
-        id: `edge-${connection.source}-${connection.target}-${isFailure ? 'success' : 'failure'}-${Date.now()}`,
-        label: isFailure ? 'On Success' : 'On Failure',
-        style: {
-          stroke: isFailure ? '#10b981' : '#ef4444',
-          strokeWidth: 2,
-          strokeDasharray: isFailure ? undefined : '4 4',
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: isFailure ? '#10b981' : '#ef4444',
-        },
-      };
-      setEdges((eds) => addEdge(newEdge, eds));
     },
     [setEdges]
   );
 
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      const source = nodes.find((n) => n.id === connection.source);
+      if (source?.type === 'START') {
+        applyEdge(connection, 'success');
+        return;
+      }
+      setPendingConnection(connection);
+    },
+    [nodes, applyEdge]
+  );
+
+  const isValidConnection = useCallback(
+    (conn: Connection | Edge) => {
+      if (conn.source === conn.target) return false;
+      const source = nodes.find((n) => n.id === conn.source);
+      const target = nodes.find((n) => n.id === conn.target);
+      if (!source || !target) return false;
+      return target.type !== 'START' && source.type !== 'STOP';
+    },
+    [nodes]
+  );
+
+  const handleConfirmEdge = (kind: EdgeKind) => {
+    if (!pendingConnection) return;
+    const connection = pendingConnection;
+    applyEdge(connection, kind);
+
+    // On Failed: ตั้งค่าเริ่มต้นให้ LINE Notify ใช้ Error Message ของ Task ก่อนหน้า (ถ้ายังไม่ได้กรอกข้อความ)
+    if (kind === 'failure') {
+      const source = nodes.find((n) => n.id === connection.source);
+      const target = nodes.find((n) => n.id === connection.target);
+      if (source && target?.type === 'LINE_NOTIFY' && !String(target.data.message ?? '').trim()) {
+        const sourceKey = (source.data.nodeKey as string) || source.id;
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === target.id ? { ...n, data: { ...n.data, message: errorMessagePlaceholder(sourceKey) } } : n
+          )
+        );
+      }
+    }
+    setPendingConnection(null);
+  };
+
+  const hasStartNode = nodes.some((n) => n.type === 'START');
+
   const addStepNode = (type: TaskType) => {
+    if (type === 'START' && hasStartNode) return;
     const usedKeys = new Set(nodes.map((n) => n.data.nodeKey as string));
-    let seq = nodes.length + 1;
-    while (usedKeys.has(`step_${seq}`)) seq++;
-    const key = `step_${seq}`;
+    let key: string;
+    if (type === 'START') {
+      key = 'start';
+    } else if (type === 'STOP') {
+      let stopSeq = 1;
+      key = 'stop';
+      while (usedKeys.has(key)) key = `stop_${++stopSeq}`;
+    } else {
+      let seq = nodes.length + 1;
+      while (usedKeys.has(`step_${seq}`)) seq++;
+      key = `step_${seq}`;
+    }
     const labelMap: Record<TaskType, string> = {
       DATABASE_BACKUP: 'Database Dump',
       FILE_BACKUP: 'Directory Archive',
@@ -265,6 +412,8 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       EMAIL_ALERT: 'SES Notification',
       GOOGLE_DRIVE_UPLOAD: 'Google Drive Upload',
       LINE_NOTIFY: 'LINE Notify',
+      START: 'Start',
+      STOP: 'Stop',
     };
 
     const defaultDataMap: Record<TaskType, Record<string, any>> = {
@@ -301,6 +450,8 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
         taskTitle: '',
         message: '',
       },
+      START: {},
+      STOP: {},
     };
 
     const newNode: Node = {
@@ -346,6 +497,17 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       setIsSaving(true);
       setStatusMessage(null);
 
+      const startCount = nodes.filter((n) => n.type === 'START').length;
+      if (startCount !== 1) {
+        setStatusMessage({
+          text: startCount === 0
+            ? 'Error: Pipeline must have exactly one Start node'
+            : 'Error: A pipeline can have only one Start node',
+          type: 'error',
+        });
+        return;
+      }
+
       // เส้นเชื่อมส่งเป็น nodeKey เพราะ Node ใหม่ยังไม่มี UUID (Backend จะแปลงเป็น ID ให้หลังบันทึก)
       const nodeKeys = nodes.map((node, index) => (node.data.nodeKey as string) || `step_${index + 1}`);
       const duplicateKey = nodeKeys.find((key, index) => nodeKeys.indexOf(key) !== index);
@@ -382,6 +544,12 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           onSuccessNodeKey: successEdge ? keyByNodeId.get(successEdge.target) : undefined,
           onFailureNodeKey: failureEdge ? keyByNodeId.get(failureEdge.target) : undefined,
         };
+      });
+
+      // Start ต้องเป็นลำดับแรกเสมอ
+      stepDtos.sort((a, b) => Number(b.nodeType === 'START') - Number(a.nodeType === 'START'));
+      stepDtos.forEach((dto, index) => {
+        dto.stepOrder = index + 1;
       });
 
       const payload: SavePipelineRequest = {
@@ -593,6 +761,23 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
             <MessageSquare className="w-3.5 h-3.5" />
             LINE Notify
           </button>
+          <span className="w-px h-5 bg-slate-700 mx-1" />
+          <button
+            onClick={() => addStepNode('START')}
+            disabled={hasStartNode}
+            title={hasStartNode ? 'Pipeline มี Start ได้เพียง 1 อัน' : 'เพิ่มจุดเริ่มต้น'}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 transition-all font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500/10"
+          >
+            <Play className="w-3.5 h-3.5" />
+            Start
+          </button>
+          <button
+            onClick={() => addStepNode('STOP')}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 hover:bg-red-500/20 transition-all font-medium"
+          >
+            <Square className="w-3.5 h-3.5" />
+            Stop
+          </button>
         </div>
 
         {/* Legend */}
@@ -613,6 +798,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          isValidConnection={isValidConnection}
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.3 }}
@@ -627,6 +813,49 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           />
         </ReactFlow>
       </div>
+
+      {/* Edge type chooser */}
+      <Dialog open={!!pendingConnection} onOpenChange={(open) => !open && setPendingConnection(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">เลือกเงื่อนไขของเส้นเชื่อม</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Task ปลายทางจะทำงานเมื่อ Task ต้นทางเป็นไปตามเงื่อนไขที่เลือก
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() => handleConfirmEdge('success')}
+              className="w-full flex items-start gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-left transition-colors"
+            >
+              <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 flex-shrink-0" />
+              <div>
+                <div className="text-sm font-semibold text-emerald-300">On Success</div>
+                <div className="text-[11px] text-slate-400">ไปต่อเมื่อ Task ก่อนหน้าทำงานสำเร็จ</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleConfirmEdge('failure')}
+              className="w-full flex items-start gap-3 p-3 rounded-lg border border-red-500/30 bg-red-500/5 hover:bg-red-500/10 text-left transition-colors"
+            >
+              <XCircle className="w-4 h-4 mt-0.5 text-red-400 flex-shrink-0" />
+              <div>
+                <div className="text-sm font-semibold text-red-300">On Failed</div>
+                <div className="text-[11px] text-slate-400">
+                  ไปต่อเมื่อ Task ก่อนหน้าล้มเหลว — ใช้ Error Message ของ Task นั้นได้ผ่านตัวแปร{' '}
+                  <span className="font-mono text-slate-300">{'${last_error_message}'}</span> หรือ{' '}
+                  <span className="font-mono text-slate-300">{'${nodeKey.error_message}'}</span>{' '}
+                  (LINE Notify จะตั้งเป็นค่าเริ่มต้นให้อัตโนมัติ)
+                </div>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Node Config Modal */}
       {editingNode && (

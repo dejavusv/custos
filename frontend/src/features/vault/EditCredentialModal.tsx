@@ -52,6 +52,7 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
     register,
     handleSubmit,
     reset,
+    setError,
     formState: { errors },
   } = useForm<EditCredentialFormValues>({
     resolver: zodResolver(editCredentialSchema),
@@ -90,6 +91,10 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
   if (!credential) return null;
 
   const onSubmit = async (values: EditCredentialFormValues) => {
+    if (credential.credentialType === 'EXTERNAL_NOTIFY' && !values.host?.trim()) {
+      setError('host', { type: 'custom', message: 'กรุณาระบุ Domain' });
+      return;
+    }
     setIsLoading(true);
     setErrorMessage(null);
 
@@ -132,6 +137,7 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
   const isSftp = credential.credentialType === 'SFTP';
   const isFtp =
     credential.credentialType === 'FTP' || credential.credentialType === 'FTPS';
+  const isExternalNotify = credential.credentialType === 'EXTERNAL_NOTIFY';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -175,9 +181,19 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2 space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
-                  Host / IP Address
+                  {isExternalNotify ? 'Domain ของระบบที่เรียกใช้งาน' : 'Host / IP Address'}
+                  {isExternalNotify && <span className="text-destructive"> *</span>}
                 </label>
-                <Input {...register('host')} disabled={isLoading} />
+                <Input
+                  placeholder={
+                    isExternalNotify
+                      ? 'เช่น ccenter.example.com หรือ http://localhost:8080'
+                      : undefined
+                  }
+                  {...register('host')}
+                  disabled={isLoading}
+                />
+                {errors.host && <p className="text-xs text-destructive">{errors.host.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Port</label>
@@ -188,7 +204,7 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
 
           {/* Username & Database Name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {credential.credentialType !== 'GENERIC_SECRET' && (
+            {credential.credentialType !== 'GENERIC_SECRET' && !isExternalNotify && (
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Username</label>
                 <Input {...register('username')} disabled={isLoading} />
@@ -208,7 +224,9 @@ export const EditCredentialModal: React.FC<EditCredentialModalProps> = ({
           {/* Password with Eye Toggle */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
-              Password (เว้นว่างไว้เพื่อคงรหัสผ่านเดิม)
+              {isExternalNotify
+                ? 'EXTERNAL_NOTIFY_AUTH_TOKEN (เข้ารหัส AES-256-GCM — เว้นว่างไว้เพื่อคงค่าเดิม)'
+                : 'Password (เว้นว่างไว้เพื่อคงรหัสผ่านเดิม)'}
             </label>
             <div className="relative">
               <Input

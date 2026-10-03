@@ -25,9 +25,11 @@ import {
 import { pipelineApi } from '../../services/pipelineApi';
 
 export const PipelinesPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'builder' | 'pipelines' | 'history'>('builder');
+  const [activeTab, setActiveTab] = useState<'builder' | 'pipelines' | 'history'>('pipelines');
   const [pipelines, setPipelines] = useState<PipelineDetailResponse[]>([]);
+  // selectedPipeline = Pipeline ที่ใช้กรอง Execution History, builderPipeline = Pipeline ที่เปิดใน Builder (null = สร้างใหม่)
   const [selectedPipeline, setSelectedPipeline] = useState<PipelineDetailResponse | null>(null);
+  const [builderPipeline, setBuilderPipeline] = useState<PipelineDetailResponse | null>(null);
   const [executions, setExecutions] = useState<PipelineExecutionResponse[]>([]);
   const [selectedExecution, setSelectedExecution] = useState<PipelineExecutionResponse | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -76,11 +78,12 @@ export const PipelinesPage: React.FC = () => {
   }, [activeTab, selectedPipeline]);
 
   const handleCreateNew = () => {
-    setSelectedPipeline(null);
+    setBuilderPipeline(null);
     setActiveTab('builder');
   };
 
   const handleEditPipeline = (pipe: PipelineDetailResponse) => {
+    setBuilderPipeline(pipe);
     setSelectedPipeline(pipe);
     setActiveTab('builder');
   };
@@ -92,6 +95,9 @@ export const PipelinesPage: React.FC = () => {
       await fetchPipelines();
       if (selectedPipeline?.id === id) {
         setSelectedPipeline(null);
+      }
+      if (builderPipeline?.id === id) {
+        setBuilderPipeline(null);
       }
     } catch (err: any) {
       alert(`Failed to delete pipeline: ${err.message}`);
@@ -199,18 +205,6 @@ export const PipelinesPage: React.FC = () => {
       {/* Tabs */}
       <div className="flex border-b border-slate-800 gap-2">
         <button
-          onClick={() => setActiveTab('builder')}
-          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'builder'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Workflow className="w-4 h-4" />
-          Visual Workflow Builder
-        </button>
-
-        <button
           onClick={() => {
             setActiveTab('pipelines');
             fetchPipelines();
@@ -222,7 +216,19 @@ export const PipelinesPage: React.FC = () => {
           }`}
         >
           <Clock className="w-4 h-4" />
-          Configured Schedules ({pipelines.length})
+          Active & Configured Pipelines ({pipelines.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('builder')}
+          className={`flex items-center gap-2 pb-3 px-3 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'builder'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Workflow className="w-4 h-4" />
+          Visual Workflow Builder
         </button>
 
         <button
@@ -242,9 +248,10 @@ export const PipelinesPage: React.FC = () => {
       {activeTab === 'builder' && (
         <div className="space-y-4">
           <PipelineCanvas
-            key={selectedPipeline?.id || 'new'}
-            initialPipeline={selectedPipeline}
+            key={builderPipeline?.id || 'new'}
+            initialPipeline={builderPipeline}
             onSaved={(saved) => {
+              setBuilderPipeline(saved);
               setSelectedPipeline(saved);
               fetchPipelines();
             }}
@@ -261,7 +268,7 @@ export const PipelinesPage: React.FC = () => {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-sm font-semibold text-slate-300">
-              Active & Configured Pipelines
+              Pipelines & Schedules
             </h2>
             <Button
               variant="outline"
@@ -348,10 +355,11 @@ export const PipelinesPage: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleEditPipeline(pipe)}
-                      className="h-8 px-2.5 text-xs text-slate-400 hover:text-white"
+                      className="h-8 px-2.5 gap-1.5 text-xs text-slate-400 hover:text-white"
                       title="Edit in Visual Builder"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
+                      Edit
                     </Button>
                   </div>
 

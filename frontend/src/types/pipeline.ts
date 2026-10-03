@@ -4,7 +4,9 @@ export type TaskType =
   | 'SPLIT_TRANSFER'
   | 'EMAIL_ALERT'
   | 'GOOGLE_DRIVE_UPLOAD'
-  | 'LINE_NOTIFY';
+  | 'LINE_NOTIFY'
+  | 'START'
+  | 'STOP';
 
 export type ExecutionStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED' | 'ABORTED' | 'SKIPPED';
 

@@ -231,6 +231,7 @@ export const ExternalNotifyPanel: React.FC<ExternalNotifyPanelProps> = ({
         {allowPlaceholders && (
           <p className="text-[11px] text-muted-foreground">
             ใช้ตัวแปรจากขั้นตอนก่อนหน้าได้ เช่น {'${last_output_path}'} {'${nodeKey.output_path}'}
+            {' '}— บนกิ่ง On Failed ใช้ Error ของ Task ที่ล้มเหลวได้: {'${last_error_message}'} {'${nodeKey.error_message}'}
           </p>
         )}
       </div>
