@@ -97,6 +97,13 @@
             <groupId>com.github.docker-java</groupId>
             <artifactId>docker-java-core</artifactId>
             <version>3.4.2</version>
+            <exclusions>
+                <!-- docker-java pulls guava 19.0, which breaks grpc/firebase (Preconditions.checkArgument overloads) -->
+                <exclusion>
+                    <groupId>com.google.guava</groupId>
+                    <artifactId>guava</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>com.github.docker-java</groupId>
@@ -165,6 +172,12 @@
             <groupId>com.google.firebase</groupId>
             <artifactId>firebase-admin</artifactId>
             <version>9.3.0</version>
+        </dependency>
+        <!-- Pin a modern Guava explicitly; required by grpc-api / google-cloud libs -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.2.1-jre</version>
         </dependency>
 
         <!-- Testing -->
