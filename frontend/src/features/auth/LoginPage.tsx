@@ -131,12 +131,6 @@ export const LoginPage: React.FC = () => {
                 )}
               </Button>
             </form>
-
-            <div className="mt-6 pt-4 border-t border-slate-800/80 text-center">
-              <p className="text-[11px] text-slate-500 font-mono">
-                Default Super Admin: <span className="text-slate-400 font-semibold">admin</span> / <span className="text-slate-400 font-semibold">AdminPassword@123</span>
-              </p>
-            </div>
           </CardContent>
         </Card>
       </div>

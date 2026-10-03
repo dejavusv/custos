@@ -132,6 +132,7 @@ POSTGRES_PASSWORD=UltraSecureDatabasePassword2026!
 
 CUSTOS_JWT_SECRET=<512-bit HEX จากขั้นตอนที่ 3.2>
 CUSTOS_VAULT_MASTER_KEY=<32-byte HEX จากขั้นตอนที่ 3.1>
+CUSTOS_ADMIN_PASSWORD=<รหัสผ่านเริ่มต้นของ admin (ใช้ตอนสร้างบัญชีครั้งแรกเท่านั้น)>
 
 CUSTOS_AWS_SES_ENABLED=true
 CUSTOS_AWS_SES_FROM_EMAIL=alerts@yourdomain.com
@@ -154,6 +155,21 @@ docker compose -f docker-compose.prod.yml ps
 - `custos-redis-prod` (healthy)
 - `custos-backend-prod` (healthy)
 - `custos-frontend-prod` (Up)
+
+### 5.1 การเข้าถึงไฟล์ใน Docker container อื่น (Task & Backup Engine Hub)
+
+หน้า Directory & File Archiver เลือก Docker container ที่อยู่ network เดียวกับ backend ก่อน แล้ว browse / archive ไฟล์ใน container นั้นได้ โดยไฟล์ backup ยังถูกเก็บในโฟลเดอร์ปลายทางฝั่ง Custos ตามที่เลือก
+
+- `docker-compose.prod.yml` mount `/var/run/docker.sock` เข้า backend และเพิ่ม `group_add` (backend รันเป็น user `custos` ไม่ใช่ root) ต้องตั้ง `DOCKER_GID` ให้ตรงกับ GID ของ group `docker` บน host:
+```bash
+stat -c '%g' /var/run/docker.sock
+```
+```ini
+DOCKER_GID=<ค่าที่ได้จากคำสั่งด้านบน>
+```
+- ค่า env เพิ่มเติม (ไม่บังคับ): `CUSTOS_DOCKER_ENABLED` (default `true`), `CUSTOS_DOCKER_HOST` (default `unix:///var/run/docker.sock`), `CUSTOS_DOCKER_NETWORKS` (ชื่อ network คั่นด้วย comma; ว่าง = ใช้ network ที่ backend join อยู่)
+- โค้ดใช้ Docker API แบบอ่านอย่างเดียว (list / inspect / `ls` / archive) และตรวจว่า container อยู่ใน network ที่อนุญาตทุกครั้ง แต่ **การเข้าถึง `docker.sock` ให้สิทธิ์สูงมากต่อ host** (mount แบบ `:ro` ไม่จำกัด API) จึงควรให้เฉพาะ Admin/Operator ที่เชื่อถือได้ และปิดด้วย `CUSTOS_DOCKER_ENABLED=false` พร้อมลบ volume/`group_add` ออกหากไม่ใช้
+- การ browse ใช้คำสั่ง `ls` ใน container: image ที่ไม่มี `ls` (เช่น distroless) จะ browse ไม่ได้ แต่ยังพิมพ์ path เองเพื่อ backup ได้
 
 ---
 

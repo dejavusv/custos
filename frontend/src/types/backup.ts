@@ -29,6 +29,8 @@ export interface DatabaseBackupRequest {
 
 export interface FileBackupRequest {
   sourcePath: string;
+  // Name of a running Docker container to read sourcePath from; omit for the Custos server filesystem
+  dockerContainer?: string;
   destinationDir?: string;
   customFileName?: string;
   compressionFormat?: CompressionFormat;

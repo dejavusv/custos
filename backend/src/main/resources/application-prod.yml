@@ -2,6 +2,11 @@ server:
   port: 8080
   shutdown: graceful
 
+custos:
+  auth:
+    # prod ต้องกำหนดผ่าน env CUSTOS_ADMIN_PASSWORD เท่านั้น (ว่าง = ไม่สร้าง admin เริ่มต้น)
+    admin-password: ${CUSTOS_ADMIN_PASSWORD:}
+
 spring:
   jpa:
     show-sql: false

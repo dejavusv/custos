@@ -55,6 +55,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       CUSTOS_JWT_SECRET: ${CUSTOS_JWT_SECRET:-}
       CUSTOS_VAULT_MASTER_KEY: ${CUSTOS_VAULT_MASTER_KEY:-}
+      CUSTOS_ADMIN_PASSWORD: ${CUSTOS_ADMIN_PASSWORD:-}
       CUSTOS_AWS_SES_ENABLED: ${CUSTOS_AWS_SES_ENABLED:-false}
       CUSTOS_AWS_SES_FROM_EMAIL: ${CUSTOS_AWS_SES_FROM_EMAIL:-noreply@custos.io}
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
@@ -68,8 +69,14 @@ services:
       GOOGLE_DRIVE_OAUTH_CLIENT_ID: ${GOOGLE_DRIVE_OAUTH_CLIENT_ID:-}
       GOOGLE_DRIVE_OAUTH_CLIENT_SECRET: ${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET:-}
       GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: ${GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN:-}
+    # Docker Engine API สำหรับเลือก container แล้ว browse/backup ไฟล์ในหน้า Task & Backup Engine Hub
+    # โค้ดเรียกใช้แบบอ่านอย่างเดียว (list/inspect/ls/archive) แต่ docker.sock ให้สิทธิ์สูงมาก
+    # ถ้าไม่ต้องการฟีเจอร์นี้ให้ลบ volume + group_add ออก และตั้ง CUSTOS_DOCKER_ENABLED=false
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - staging_prod_data:/var/custos/staging
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - custos-network
     healthcheck:

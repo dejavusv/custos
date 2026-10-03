@@ -23,8 +23,11 @@ custos:
   auth:
     max-failed-attempts: 5
     lockout-duration-minutes: 15
+    admin-password: AdminPassword@123
   vault:
     master-key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  docker:
+    enabled: false
   gcp:
     enabled: false
     service-account-path: classpath:credentials/service-account.json

@@ -40,6 +40,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Ca
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { StorageBrowserDialog } from '../../components/storage/StorageBrowserDialog';
+import { DockerContainerSelect } from '../../components/storage/DockerContainerSelect';
 
 export const TasksPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'database' | 'filesystem' | 'retention' | 'transfer' | 'gdrive' | 'line'>('database');
@@ -56,6 +57,7 @@ export const TasksPage: React.FC = () => {
   const [dbError, setDbError] = useState<string | null>(null);
 
   // File Backup Form State
+  const [sourceDockerContainer, setSourceDockerContainer] = useState('');
   const [sourcePath, setSourcePath] = useState('');
   const [fileDestinationDir, setFileDestinationDir] = useState('');
   const [fileCompression, setFileCompression] = useState<CompressionFormat>('TAR_GZ');
@@ -192,6 +194,7 @@ export const TasksPage: React.FC = () => {
       setFileResult(null);
       const exclusionList = exclusions.trim() ? exclusions.split(',').map((e) => e.trim()) : undefined;
       return await backupApi.triggerFileSystemBackup({
+        dockerContainer: sourceDockerContainer || undefined,
         sourcePath: sourcePath.trim(),
         destinationDir: fileDestinationDir.trim() || undefined,
         compressionFormat: fileCompression,
@@ -561,11 +564,28 @@ export const TasksPage: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
+                  แหล่งไฟล์ต้นทาง (Docker container ใน network เดียวกับ backend)
+                </label>
+                <DockerContainerSelect
+                  value={sourceDockerContainer}
+                  onChange={(name) => {
+                    setSourceDockerContainer(name);
+                    setSourcePath(''); // a path from another source is meaningless here
+                  }}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
                   พาธโฟลเดอร์หรือไฟล์ต้นทาง (Source Path) <span className="text-destructive">*</span>
                 </label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="เช่น storage หรือ storage/backups หรือ /var/www/html"
+                    placeholder={
+                      sourceDockerContainer
+                        ? 'พาธภายใน container เช่น /usr/share/nginx/html'
+                        : 'เช่น storage หรือ storage/backups หรือ /var/www/html'
+                    }
                     value={sourcePath}
                     onChange={(e) => setSourcePath(e.target.value)}
                   />
@@ -576,14 +596,16 @@ export const TasksPage: React.FC = () => {
                       openBrowser(
                         'sourcePath',
                         'both',
-                        'เลือกไฟล์หรือโฟลเดอร์ต้นทาง (Source Path)',
+                        sourceDockerContainer
+                          ? `เลือกไฟล์หรือโฟลเดอร์ต้นทางใน container: ${sourceDockerContainer}`
+                          : 'เลือกไฟล์หรือโฟลเดอร์ต้นทาง (Source Path)',
                         sourcePath
                       )
                     }
                     className="flex items-center gap-1.5 shrink-0"
                   >
                     <FolderOpen className="w-4 h-4 text-primary" />
-                    <span>เลือกจาก Server</span>
+                    <span>{sourceDockerContainer ? 'เลือกจาก Container' : 'เลือกจาก Server'}</span>
                   </Button>
                 </div>
               </div>
@@ -1210,6 +1232,7 @@ export const TasksPage: React.FC = () => {
         title={browserTitle}
         mode={browserMode}
         initialPath={browserInitialPath}
+        dockerContainer={browserTargetField === 'sourcePath' && sourceDockerContainer ? sourceDockerContainer : undefined}
       />
     </div>
   );

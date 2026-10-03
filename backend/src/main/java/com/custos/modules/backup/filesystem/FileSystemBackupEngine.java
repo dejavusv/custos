@@ -37,7 +37,7 @@ public class FileSystemBackupEngine {
         }
 
         Instant startTime = Instant.now();
-        List<PathMatcher> matchers = buildExclusionMatchers(request.getExclusionPatterns(), sourcePath.getFileSystem());
+        ExclusionMatcher matchers = ExclusionMatcher.of(request.getExclusionPatterns(), sourcePath.getFileSystem());
 
         CompressionFormat format = request.getCompressionFormat() != null ? request.getCompressionFormat() : CompressionFormat.TAR_GZ;
 
@@ -87,7 +87,7 @@ public class FileSystemBackupEngine {
         }
     }
 
-    private long[] archiveAsTarGz(Path sourcePath, OutputStream out, List<PathMatcher> matchers) throws IOException {
+    private long[] archiveAsTarGz(Path sourcePath, OutputStream out, ExclusionMatcher matchers) throws IOException {
         long uncompressedBytes = 0;
         long fileCount = 0;
         byte[] buffer = new byte[BUFFER_SIZE];
@@ -104,7 +104,7 @@ public class FileSystemBackupEngine {
 
             while (!stack.isEmpty()) {
                 Path current = stack.pop();
-                if (isExcluded(current, sourcePath, matchers)) {
+                if (matchers.isExcluded(current, sourcePath)) {
                     continue;
                 }
 
@@ -143,7 +143,7 @@ public class FileSystemBackupEngine {
         return new long[]{uncompressedBytes, fileCount};
     }
 
-    private long[] archiveAsZip(Path sourcePath, OutputStream out, List<PathMatcher> matchers) throws IOException {
+    private long[] archiveAsZip(Path sourcePath, OutputStream out, ExclusionMatcher matchers) throws IOException {
         long uncompressedBytes = 0;
         long fileCount = 0;
         byte[] buffer = new byte[BUFFER_SIZE];
@@ -154,7 +154,7 @@ public class FileSystemBackupEngine {
 
             while (!stack.isEmpty()) {
                 Path current = stack.pop();
-                if (isExcluded(current, sourcePath, matchers)) {
+                if (matchers.isExcluded(current, sourcePath)) {
                     continue;
                 }
 
@@ -190,42 +190,6 @@ public class FileSystemBackupEngine {
         }
 
         return new long[]{uncompressedBytes, fileCount};
-    }
-
-    private List<PathMatcher> buildExclusionMatchers(List<String> patterns, FileSystem fileSystem) {
-        if (patterns == null || patterns.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<PathMatcher> matchers = new ArrayList<>();
-        for (String pattern : patterns) {
-            if (pattern != null && !pattern.trim().isEmpty()) {
-                String clean = pattern.trim().replace('\\', '/');
-                try {
-                    matchers.add(fileSystem.getPathMatcher("glob:" + clean));
-                } catch (Exception e) {
-                    log.warn("Invalid glob pattern '{}': {}", clean, e.getMessage());
-                }
-            }
-        }
-        return matchers;
-    }
-
-    private boolean isExcluded(Path path, Path root, List<PathMatcher> matchers) {
-        if (matchers.isEmpty()) {
-            return false;
-        }
-
-        Path relative = root.relativize(path);
-        String relativeStr = relative.toString().replace('\\', '/');
-        Path normalizedRelative = Paths.get(relativeStr);
-        String fileName = path.getFileName() != null ? path.getFileName().toString() : "";
-
-        for (PathMatcher matcher : matchers) {
-            if (matcher.matches(normalizedRelative) || matcher.matches(Paths.get(fileName))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void deleteFileQuietly(File file) {

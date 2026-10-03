@@ -6,7 +6,9 @@ import com.custos.modules.backup.database.MySqlBackupEngine;
 import com.custos.modules.backup.database.PostgreSqlBackupEngine;
 import com.custos.modules.backup.dto.DatabaseBackupRequest;
 import com.custos.modules.backup.dto.FileBackupRequest;
+import com.custos.modules.backup.filesystem.DockerContainerBackupEngine;
 import com.custos.modules.backup.filesystem.FileSystemBackupEngine;
+import com.custos.modules.docker.service.DockerContainerService;
 import com.custos.modules.backup.model.BackupResult;
 import com.custos.modules.backup.model.CompressionFormat;
 import com.custos.modules.vault.dto.DecryptedSecretPayload;
@@ -42,6 +44,7 @@ public class BackupService {
     private final MySqlBackupEngine mySqlBackupEngine;
     private final PostgreSqlBackupEngine postgreSqlBackupEngine;
     private final FileSystemBackupEngine fileSystemBackupEngine;
+    private final DockerContainerBackupEngine dockerContainerBackupEngine;
     private final CredentialVaultRepository credentialVaultRepository;
     private final CredentialService credentialService;
     private final AuditLogService auditLogService;
@@ -118,8 +121,16 @@ public class BackupService {
             dir.mkdirs();
         }
 
+        boolean fromDocker = request.getDockerContainer() != null && !request.getDockerContainer().isBlank();
+
         Path sourcePath = Paths.get(request.getSourcePath());
         String folderName = sourcePath.getFileName() != null ? sourcePath.getFileName().toString() : "backup";
+        if (fromDocker) {
+            // container paths are POSIX; Paths.get would mangle them on a Windows host
+            String normalized = DockerContainerService.normalizePath(request.getSourcePath());
+            folderName = "/".equals(normalized) ? request.getDockerContainer().trim()
+                    : normalized.substring(normalized.lastIndexOf('/') + 1);
+        }
         String timestamp = LocalDateTime.now().format(TIMESTAMP_FORMATTER);
         String extension = request.getCompressionFormat() == CompressionFormat.ZIP ? ".zip" : ".tar.gz";
 
@@ -129,15 +140,20 @@ public class BackupService {
 
         File targetFile = new File(dir, fileName);
 
-        BackupResult result = fileSystemBackupEngine.executeBackup(request, targetFile);
+        BackupResult result = fromDocker
+                ? dockerContainerBackupEngine.executeBackup(request, targetFile)
+                : fileSystemBackupEngine.executeBackup(request, targetFile);
 
         if (currentUser != null) {
+            String sourceLabel = fromDocker
+                    ? "docker:" + request.getDockerContainer().trim() + ":" + request.getSourcePath().trim()
+                    : sourcePath.toString();
             auditLogService.logFromRequest(
                     currentUser.getId(),
                     currentUser.getUsername(),
                     "FILE_BACKUP",
-                    "FILE:" + sourcePath,
-                    String.format("Archived %s -> %s (%d files, %d bytes)", sourcePath, fileName, result.getItemCount(), result.getFileSizeBytes()),
+                    "FILE:" + sourceLabel,
+                    String.format("Archived %s -> %s (%d files, %d bytes)", sourceLabel, fileName, result.getItemCount(), result.getFileSizeBytes()),
                     servletRequest
             );
         }

@@ -41,7 +41,7 @@ npm run build
 ```
 There is no lint or test script. `npm run build` runs `tsc`, which is the only type check.
 
-Default login, created or reset by `DataSeeder` on every startup: `admin` / `AdminPassword@123` (ROLE_SUPER_ADMIN).
+Default login: `admin` with the password from `CUSTOS_ADMIN_PASSWORD` (ROLE_SUPER_ADMIN). `application.yml` defaults it to `AdminPassword@123` for dev only; the `prod` profile has no default, and a blank value means no admin is initialized. `DataSeeder` sets it only when `admin` does not exist, or when the row is still the unusable placeholder hash inserted by `V2__seed_default_roles_and_admin.sql`. It never resets the password afterwards, so a changed password survives restarts.
 
 ## Backend architecture
 
@@ -71,7 +71,7 @@ To add a new node type, update all of the following: the `TaskType` enum, the `s
 
 **Database:** Flyway migrations live in `resources/db/migration/V{n}__desc.sql`, and the main profile uses `ddl-auto: validate`. Any entity change therefore needs a new migration. Timestamps are UTC `Instant`. Tests use the `test` profile (`src/test/resources/application-test.yml`): H2 in PostgreSQL mode, Flyway **disabled**, `create-drop`, in-memory Quartz and GCP off. That means tests never exercise the migrations.
 
-**Config/env:** `CUSTOS_JWT_SECRET`, `CUSTOS_VAULT_MASTER_KEY`, `SPRING_DATASOURCE_*`, `CUSTOS_GCP_ENABLED`, `GCP_SERVICE_ACCOUNT_KEY_PATH`, `GOOGLE_DRIVE_DEFAULT_FOLDER_ID`. The dev defaults are in `application.yml`, and the Docker image runs with `SPRING_PROFILES_ACTIVE=prod` (`application-prod.yml`).
+**Config/env:** `CUSTOS_JWT_SECRET`, `CUSTOS_VAULT_MASTER_KEY`, `CUSTOS_ADMIN_PASSWORD`, `SPRING_DATASOURCE_*`, `CUSTOS_GCP_ENABLED`, `GCP_SERVICE_ACCOUNT_KEY_PATH`, `GOOGLE_DRIVE_DEFAULT_FOLDER_ID`. The dev defaults are in `application.yml`, and the Docker image runs with `SPRING_PROFILES_ACTIVE=prod` (`application-prod.yml`).
 
 ## Frontend architecture
 

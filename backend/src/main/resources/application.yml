@@ -47,8 +47,16 @@ custos:
   auth:
     max-failed-attempts: 5
     lockout-duration-minutes: 15
+    # รหัสผ่านเริ่มต้นของ admin (ใช้ตอนสร้างครั้งแรกเท่านั้น) ค่า default นี้ใช้เฉพาะ dev; profile prod ไม่มี default
+    admin-password: ${CUSTOS_ADMIN_PASSWORD:AdminPassword@123}
   vault:
     master-key: ${CUSTOS_VAULT_MASTER_KEY:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+  docker:
+    # เข้าถึงไฟล์ใน container อื่นผ่าน Docker Engine API (ต้อง mount docker.sock เข้า backend)
+    enabled: ${CUSTOS_DOCKER_ENABLED:true}
+    host: ${CUSTOS_DOCKER_HOST:unix:///var/run/docker.sock}
+    # network ที่อนุญาต (คั่นด้วย comma) ว่าง = ใช้ network ที่ backend container join อยู่
+    networks: ${CUSTOS_DOCKER_NETWORKS:}
   gcp:
     enabled: ${CUSTOS_GCP_ENABLED:true}
     service-account-path: ${GCP_SERVICE_ACCOUNT_KEY_PATH:classpath:credentials/service-account.json}

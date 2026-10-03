@@ -22,7 +22,7 @@
 เมื่อระบบติดตั้งเสร็จสิ้น DataSeeder จะสร้างบัญชี Super Admin เริ่มต้น:
 - **URL:** `http://<YOUR_SERVER_IP>/login`
 - **Username:** `admin`
-- **Default Password:** `AdminPassword@123`
+- **Password:** ค่าที่ผู้ติดตั้งกำหนดในตัวแปร `CUSTOS_ADMIN_PASSWORD` ของไฟล์ env ตอนติดตั้ง (ใช้ตอนสร้างบัญชีครั้งแรกเท่านั้น)
 
 > [!IMPORTANT]
 > **คำแนะนำด้านความปลอดภัย:**

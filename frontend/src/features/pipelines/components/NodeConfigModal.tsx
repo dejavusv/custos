@@ -20,6 +20,7 @@ import { Input } from '../../../components/ui/Input';
 import { TaskType } from '../../../types/pipeline';
 import { vaultApi } from '../../../services/vaultApi';
 import { StorageBrowserDialog } from '../../../components/storage/StorageBrowserDialog';
+import { DockerContainerSelect } from '../../../components/storage/DockerContainerSelect';
 import { ExternalNotifyPanel } from '../../notify/components/ExternalNotifyPanel';
 
 interface NodeConfigModalProps {
@@ -443,6 +444,21 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
             {/* NODE TYPE 2: FILE BACKUP */}
             {nodeType === 'FILE_BACKUP' && (
               <div className="space-y-4 pt-2 border-t border-slate-800/80">
+                {/* Source location: Custos server or a Docker container on the same network */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">
+                    แหล่งไฟล์ต้นทาง (Docker container ใน network เดียวกับ backend)
+                  </label>
+                  <DockerContainerSelect
+                    value={formFields.dockerContainer || ''}
+                    onChange={(name) => {
+                      handleFieldChange('dockerContainer', name);
+                      handleFieldChange('sourcePath', ''); // a path from another source is meaningless here
+                    }}
+                    selectClassName="w-full px-3 py-2 text-xs rounded-md border border-slate-800 bg-slate-950 text-white focus:outline-none focus:border-primary"
+                  />
+                </div>
+
                 {/* Source Path with Storage Browser */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-300">
@@ -451,7 +467,11 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
                   <div className="flex gap-2">
                     <Input
                       type="text"
-                      placeholder="เช่น storage/data หรือ /var/www/uploads"
+                      placeholder={
+                        formFields.dockerContainer
+                          ? 'พาธภายใน container เช่น /usr/share/nginx/html'
+                          : 'เช่น storage/data หรือ /var/www/uploads'
+                      }
                       value={formFields.sourcePath || ''}
                       onChange={(e) => handleFieldChange('sourcePath', e.target.value)}
                       required
@@ -465,14 +485,16 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
                         openBrowser(
                           'sourcePath',
                           'both',
-                          'เลือกไฟล์หรือโฟลเดอร์ต้นทาง (Source Path)',
+                          formFields.dockerContainer
+                            ? `เลือกไฟล์หรือโฟลเดอร์ต้นทางใน container: ${formFields.dockerContainer}`
+                            : 'เลือกไฟล์หรือโฟลเดอร์ต้นทาง (Source Path)',
                           formFields.sourcePath
                         )
                       }
                       className="gap-1.5 shrink-0 text-xs border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200"
                     >
                       <FolderOpen className="w-3.5 h-3.5 text-primary" />
-                      <span>เลือกจาก Server</span>
+                      <span>{formFields.dockerContainer ? 'เลือกจาก Container' : 'เลือกจาก Server'}</span>
                     </Button>
                   </div>
                 </div>
@@ -902,6 +924,11 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
         title={browserTitle}
         mode={browserMode}
         initialPath={browserInitialPath}
+        dockerContainer={
+          nodeType === 'FILE_BACKUP' && browserTargetField === 'sourcePath' && formFields.dockerContainer
+            ? String(formFields.dockerContainer)
+            : undefined
+        }
       />
     </>
   );

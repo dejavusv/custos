@@ -28,6 +28,7 @@ import {
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { backupApi } from '../../services/backupApi';
+import { dockerApi } from '../../services/dockerApi';
 import { StorageItem } from '../../types/backup';
 
 export interface StorageBrowserDialogProps {
@@ -38,6 +39,8 @@ export interface StorageBrowserDialogProps {
   description?: string;
   mode?: 'folder' | 'file' | 'both';
   initialPath?: string;
+  // When set, browse inside this Docker container (read-only, rooted at "/") instead of the Custos server
+  dockerContainer?: string;
 }
 
 export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
@@ -48,6 +51,7 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
   description,
   mode = 'folder',
   initialPath,
+  dockerContainer,
 }) => {
   const queryClient = useQueryClient();
   const [currentPath, setCurrentPath] = useState<string>(initialPath || '');
@@ -68,9 +72,9 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
       setNewFolderName('');
       setFolderCreateError(null);
     }
-  }, [open, initialPath]);
+  }, [open, initialPath, dockerContainer]);
 
-  // Query to browse storage
+  // Query to browse storage (Custos server or a Docker container)
   const {
     data: browseData,
     isLoading,
@@ -78,8 +82,13 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
     error,
     refetch,
   } = useQuery({
-    queryKey: ['storageBrowse', currentPath],
-    queryFn: () => backupApi.browseStorage(currentPath || undefined),
+    queryKey: dockerContainer
+      ? ['dockerBrowse', dockerContainer, currentPath]
+      : ['storageBrowse', currentPath],
+    queryFn: () =>
+      dockerContainer
+        ? dockerApi.browseContainer(dockerContainer, currentPath || undefined)
+        : backupApi.browseStorage(currentPath || undefined),
     enabled: open,
   });
 
@@ -222,7 +231,15 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
                 {title}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                {description || (
+                {description || (dockerContainer ? (
+                  <>
+                    Docker container{' '}
+                    <code className="px-1.5 py-0.5 rounded bg-secondary text-primary font-mono text-[11px]">
+                      {dockerContainer}
+                    </code>
+                    {' • ดับเบิ้ลคลิกโฟลเดอร์เพื่อเปิด และคลิกเลือกไฟล์หรือโฟลเดอร์'}
+                  </>
+                ) : (
                   <>
                     เริ่มต้นที่โฟลเดอร์{' '}
                     <code className="px-1.5 py-0.5 rounded bg-secondary text-primary font-mono text-[11px]">
@@ -232,7 +249,7 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
                     {mode === 'file' && ' • ดับเบิ้ลคลิกโฟลเดอร์เพื่อเปิด และคลิกเลือกไฟล์'}
                     {mode === 'both' && ' • เลือกไฟล์หรือโฟลเดอร์'}
                   </>
-                )}
+                ))}
               </DialogDescription>
             </div>
           </div>
@@ -243,11 +260,11 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
               size="sm"
               variant="outline"
               onClick={handleGoHome}
-              title="กลับไปที่โฟลเดอร์เริ่มต้น (Default)"
+              title={dockerContainer ? 'กลับไปที่ root (/) ของ container' : 'กลับไปที่โฟลเดอร์เริ่มต้น (Default)'}
               className="h-8 px-2.5 gap-1.5 text-xs text-foreground"
             >
               <Home className="w-3.5 h-3.5" />
-              <span>ค่าเริ่มต้น</span>
+              <span>{dockerContainer ? 'Root (/)' : 'ค่าเริ่มต้น'}</span>
             </Button>
 
             <Button
@@ -273,27 +290,30 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
               <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
             </Button>
 
-            <Button
-              size="sm"
-              variant={isCreatingFolder ? 'secondary' : 'outline'}
-              onClick={() => {
-                setIsCreatingFolder(!isCreatingFolder);
-                setFolderCreateError(null);
-                setNewFolderName('');
-              }}
-              title="สร้างโฟลเดอร์ใหม่"
-              className="h-8 px-2.5 gap-1.5 text-xs text-foreground ml-auto"
-            >
-              <FolderPlus className="w-3.5 h-3.5 text-primary" />
-              <span>สร้างโฟลเดอร์</span>
-            </Button>
+            {/* container files are read-only, so new folders can only be created on the Custos server */}
+            {!dockerContainer && (
+              <Button
+                size="sm"
+                variant={isCreatingFolder ? 'secondary' : 'outline'}
+                onClick={() => {
+                  setIsCreatingFolder(!isCreatingFolder);
+                  setFolderCreateError(null);
+                  setNewFolderName('');
+                }}
+                title="สร้างโฟลเดอร์ใหม่"
+                className="h-8 px-2.5 gap-1.5 text-xs text-foreground ml-auto"
+              >
+                <FolderPlus className="w-3.5 h-3.5 text-primary" />
+                <span>สร้างโฟลเดอร์</span>
+              </Button>
+            )}
           </div>
 
           {/* Current Path Bar */}
           <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-md bg-secondary/40 border border-border text-xs font-mono">
             <span className="text-muted-foreground select-none">Path:</span>
             <span className="text-foreground truncate flex-1 font-medium">
-              {browseData?.currentPath || currentPath || 'storage/backups'}
+              {browseData?.currentPath || currentPath || (dockerContainer ? '/' : 'storage/backups')}
             </span>
             <button
               type="button"
@@ -306,7 +326,7 @@ export const StorageBrowserDialog: React.FC<StorageBrowserDialogProps> = ({
           </div>
 
           {/* Inline Create Folder Form */}
-          {isCreatingFolder && (
+          {isCreatingFolder && !dockerContainer && (
             <form onSubmit={handleCreateFolderSubmit} className="mt-2.5 p-2.5 rounded-md bg-primary/5 border border-primary/20 space-y-2">
               <div className="flex items-center gap-2">
                 <FolderPlus className="w-4 h-4 text-primary flex-shrink-0" />

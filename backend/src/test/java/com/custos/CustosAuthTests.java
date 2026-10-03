@@ -71,29 +71,69 @@ class CustosAuthTests {
     private com.custos.modules.auth.service.DataSeeder dataSeeder;
 
     @Test
-    @DisplayName("ทดสอบ DataSeeder อัปเดตรหัสผ่านเมื่อ hash ในฐานข้อมูลไม่ตรงกับ default password")
-    void testDataSeederSyncsPassword() {
-        // จำลองสถานะที่ user admin มี dummy hash ใน DB
+    @DisplayName("ทดสอบ DataSeeder ตั้งรหัสผ่านเริ่มต้นให้ admin ที่ยังเป็นแถว seed จาก migration")
+    void testDataSeederInitializesMigrationSeededAdmin() {
+        // จำลองสถานะหลังรัน V2 migration: admin มี hash placeholder ที่ล็อกอินไม่ได้
         var admin = userRepository.findByUsername("admin").orElseThrow();
-        admin.setPasswordHash("$2a$12$dummyHashFromOldFlywaySeedPlaceholder12345678901234567890");
+        admin.setPasswordHash(com.custos.modules.auth.service.DataSeeder.MIGRATION_PLACEHOLDER_HASH);
         userRepository.save(admin);
 
-        // ตรวจสอบว่าก่อนรัน DataSeeder รหัสผ่านผิด
-        assertFalse(passwordEncoder.matches("AdminPassword@123", admin.getPasswordHash()));
-
-        // รัน DataSeeder
         dataSeeder.run();
 
-        // ตรวจสอบว่าหลังรัน DataSeeder รหัสผ่านถูกซิงค์กลับมาเป็น AdminPassword@123
         var updatedAdmin = userRepository.findByUsername("admin").orElseThrow();
         assertTrue(passwordEncoder.matches("AdminPassword@123", updatedAdmin.getPasswordHash()));
         assertEquals(com.custos.modules.auth.entity.UserStatus.ACTIVE, updatedAdmin.getStatus());
 
-        // และสามารถล็อกอินได้สำเร็จ
         LoginRequest request = new LoginRequest();
         request.setUsername("admin");
         request.setPassword("AdminPassword@123");
         LoginResponse response = authService.login(request, new MockHttpServletRequest());
         assertNotNull(response.getAccessToken());
+    }
+
+    @Test
+    @DisplayName("ทดสอบ DataSeeder ไม่รีเซ็ตรหัสผ่าน admin ที่เปลี่ยนไปแล้ว")
+    void testDataSeederKeepsChangedAdminPassword() {
+        var admin = userRepository.findByUsername("admin").orElseThrow();
+        String originalHash = admin.getPasswordHash();
+        String changedHash = passwordEncoder.encode("MyNewSecret#2026");
+        admin.setPasswordHash(changedHash);
+        userRepository.save(admin);
+
+        try {
+            dataSeeder.run();
+
+            var after = userRepository.findByUsername("admin").orElseThrow();
+            assertEquals(changedHash, after.getPasswordHash());
+            assertFalse(passwordEncoder.matches("AdminPassword@123", after.getPasswordHash()));
+        } finally {
+            // คืนค่าเดิมเพื่อไม่ให้กระทบ test อื่นที่ล็อกอินด้วยรหัสเริ่มต้น
+            var restore = userRepository.findByUsername("admin").orElseThrow();
+            restore.setPasswordHash(originalHash);
+            userRepository.save(restore);
+        }
+    }
+
+    @Test
+    @DisplayName("ทดสอบ DataSeeder ไม่ initialize admin เมื่อไม่ได้ตั้ง CUSTOS_ADMIN_PASSWORD")
+    void testDataSeederSkipsAdminWhenPasswordNotConfigured() {
+        var admin = userRepository.findByUsername("admin").orElseThrow();
+        String originalHash = admin.getPasswordHash();
+        admin.setPasswordHash(com.custos.modules.auth.service.DataSeeder.MIGRATION_PLACEHOLDER_HASH);
+        userRepository.save(admin);
+        Object configured = org.springframework.test.util.ReflectionTestUtils.getField(dataSeeder, "adminPassword");
+
+        try {
+            org.springframework.test.util.ReflectionTestUtils.setField(dataSeeder, "adminPassword", "");
+            dataSeeder.run();
+
+            var after = userRepository.findByUsername("admin").orElseThrow();
+            assertEquals(com.custos.modules.auth.service.DataSeeder.MIGRATION_PLACEHOLDER_HASH, after.getPasswordHash());
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(dataSeeder, "adminPassword", configured);
+            var restore = userRepository.findByUsername("admin").orElseThrow();
+            restore.setPasswordHash(originalHash);
+            userRepository.save(restore);
+        }
     }
 }

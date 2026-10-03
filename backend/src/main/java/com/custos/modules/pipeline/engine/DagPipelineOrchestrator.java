@@ -323,7 +323,12 @@ public class DagPipelineOrchestrator {
                             .collect(Collectors.toList());
                 }
 
+                String dockerContainer = config.get("dockerContainer") != null
+                        ? context.resolvePlaceholders(config.get("dockerContainer").toString().trim())
+                        : null;
+
                 FileBackupRequest req = FileBackupRequest.builder()
+                        .dockerContainer(dockerContainer != null && !dockerContainer.isEmpty() ? dockerContainer : null)
                         .sourcePath(context.resolvePlaceholders((String) config.getOrDefault("sourcePath", "")))
                         .destinationDir(context.resolvePlaceholders((String) config.getOrDefault("destinationDir", "storage/backups")))
                         .customFileName(context.resolvePlaceholders((String) config.get("customFileName")))
