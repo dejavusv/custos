@@ -1,139 +1,294 @@
 import React from 'react';
-import { 
-  Server, 
-  ShieldCheck, 
-  Activity, 
-  CheckCircle2, 
-  Clock, 
-  Layers, 
-  Users
-} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Workflow, History, FileText, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
+import { api } from '../../services/api';
+import { dashboardApi } from '../../services/dashboardApi';
+import { ApiResponse, PageableResponse } from '../../types/api';
+import { AuditLog } from '../../types/user';
+import { DashboardSummary } from '../../types/dashboard';
+import { formatDateTime, formatDuration } from '../../lib/format';
+import { ExecutionStatusBadge } from '../../components/ExecutionStatusBadge';
+import { Card, CardHeader, CardTitle, CardDescription } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { Link } from 'react-router-dom';
+
+const REFRESH_INTERVAL_MS = 15000;
+const AUDIT_LIMIT = 10;
+
+const renderActionBadge = (act: string) => {
+  if (act.includes('SUCCESS') || act.includes('CREATED') || act.includes('CREATE')) {
+    return <Badge variant="success">{act}</Badge>;
+  }
+  if (act.includes('FAILED') || act.includes('LOCKED') || act.includes('BLOCKED') || act.includes('DELETE')) {
+    return <Badge variant="destructive">{act}</Badge>;
+  }
+  if (act.includes('UPDATED') || act.includes('UPDATE') || act.includes('RESET')) {
+    return <Badge variant="warning">{act}</Badge>;
+  }
+  return <Badge variant="outline">{act}</Badge>;
+};
+
+const TableLoading: React.FC<{ colSpan: number; text: string }> = ({ colSpan, text }) => (
+  <tr>
+    <td colSpan={colSpan} className="py-8 text-center text-slate-500">
+      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
+      {text}
+    </td>
+  </tr>
+);
+
+const TableEmpty: React.FC<{ colSpan: number; text: string }> = ({ colSpan, text }) => (
+  <tr>
+    <td colSpan={colSpan} className="py-8 text-center text-slate-500">
+      {text}
+    </td>
+  </tr>
+);
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuthStore();
+  const isAdmin = !!user?.roles?.some((r) => r === 'ROLE_SUPER_ADMIN' || r === 'ROLE_ADMIN');
 
-  const stats = [
-    { title: 'System Status', value: 'HEALTHY', sub: 'PostgreSQL & Spring Boot Connected', icon: Activity, color: 'text-emerald-400' },
-    { title: 'Security Engine', value: 'ACTIVE', sub: 'BCrypt & JWT Token Rotation', icon: ShieldCheck, color: 'text-sky-400' },
-    { title: 'Active User', value: user?.username || 'admin', sub: `Role: ${user?.roles?.[0] || 'SUPER_ADMIN'}`, icon: Users, color: 'text-purple-400' },
-    { title: 'Environment', value: 'DEVELOPMENT', sub: 'Docker Containers Active', icon: Server, color: 'text-amber-400' },
-  ];
+  const summaryQuery = useQuery<DashboardSummary>({
+    queryKey: ['dashboard-summary'],
+    queryFn: dashboardApi.getSummary,
+    refetchInterval: REFRESH_INTERVAL_MS,
+  });
 
-  const phaseProgress = [
-    { name: 'Phase 1: Foundation, Security & User Management', status: 'COMPLETED', desc: 'Spring Security, JWT Rotation, Account Lockout, RBAC, User Management UI' },
-    { name: 'Phase 2: Task Engines & Credential Vault', status: 'READY_NEXT', desc: 'AES-256-GCM Vault, ProcessBuilder CLI Sandboxing, DB/File Backup, Chunk Splitter' },
-    { name: 'Phase 3: Pipeline Orchestration & Scheduler', status: 'PLANNED', desc: 'Quartz Scheduler, DAG Workflow Engine, React Flow Visual Builder' },
-    { name: 'Phase 4: Real-time Live Console & AWS SES', status: 'PLANNED', desc: 'WebSocket STOMP Log Streaming, Terminal Widget, SES Email Alerting' },
-    { name: 'Phase 5: Testing, Hardening & Resilience', status: 'PLANNED', desc: 'Testcontainers Integration Tests, Fault Injection, Chunk Retry' },
-    { name: 'Phase 6: Containerization & Deployment', status: 'PLANNED', desc: 'Multi-stage Docker, Actuator Metrics, Handover Docs' },
-  ];
+  // Audit Logs เป็น API เฉพาะ ADMIN / SUPER_ADMIN
+  const auditQuery = useQuery<PageableResponse<AuditLog>>({
+    queryKey: ['dashboard-audit-logs'],
+    enabled: isAdmin,
+    refetchInterval: REFRESH_INTERVAL_MS,
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<PageableResponse<AuditLog>>>('/audit-logs', {
+        params: { page: 0, size: AUDIT_LIMIT },
+      });
+      return res.data.data!;
+    },
+  });
+
+  const summary = summaryQuery.data;
+  const isFetching = summaryQuery.isFetching || auditQuery.isFetching;
+
+  const handleRefresh = () => {
+    summaryQuery.refetch();
+    if (isAdmin) auditQuery.refetch();
+  };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Welcome Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-800 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10 text-xs">
-              System Operational
-            </Badge>
-            <span className="text-xs text-slate-500">v1.0.0-SNAPSHOT</span>
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">
+          <span className="text-xs text-slate-500">v1.0.0-SNAPSHOT</span>
+          <h1 className="text-2xl font-bold text-white tracking-tight mt-1">
             ยินดีต้อนรับสู่ Custos Platform, {user?.username}
           </h1>
           <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-            ระบบ Server Automation & Task Scheduling Platform สำหรับงานสำรองข้อมูลและร้อยเรียง Pipeline ปัจจุบัน Phase 1 พร้อมใช้งานแล้ว
+            ระบบ Server Automation & Task Scheduling Platform สำหรับงานสำรองข้อมูลและร้อยเรียง Pipeline
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Link to="/users">
-            <Button variant="outline" className="border-slate-700 text-slate-300 hover:text-white">
-              จัดการผู้ใช้งาน
-            </Button>
-          </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isFetching}
+            className="gap-2 border-slate-700 text-slate-300 hover:text-white"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+            <span>รีเฟรช</span>
+          </Button>
+          {isAdmin && (
+            <Link to="/users">
+              <Button variant="outline" className="border-slate-700 text-slate-300 hover:text-white">
+                จัดการผู้ใช้งาน
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={idx} className="border-slate-800 bg-slate-900/80 shadow-md">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{stat.title}</p>
-                  <p className="text-xl font-bold text-white mt-1">{stat.value}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{stat.sub}</p>
-                </div>
-                <div className={`p-3 rounded-xl bg-slate-950 border border-slate-800 ${stat.color}`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Implementation Roadmap Status */}
-      <Card className="border-slate-800 bg-slate-900/90 shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-            <Layers className="w-5 h-5 text-primary" />
-            สถานะความคืบหน้าของโครงการ (Development Roadmap)
-          </CardTitle>
-          <CardDescription className="text-xs text-slate-400">
-            ภาพรวมการพัฒนาตาม Phase ที่กำหนดในเอกสาร plan.md
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {phaseProgress.map((phase, idx) => (
-              <div
-                key={idx}
-                className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm text-white">{phase.name}</span>
-                    {phase.status === 'COMPLETED' && (
-                      <Badge variant="success" className="text-[10px]">
-                        เสร็จสมบูรณ์
-                      </Badge>
-                    )}
-                    {phase.status === 'READY_NEXT' && (
-                      <Badge variant="info" className="text-[10px]">
-                        พร้อมพัฒนาต่อไป
-                      </Badge>
-                    )}
-                    {phase.status === 'PLANNED' && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        ตามแผนงาน
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-400">{phase.desc}</p>
-                </div>
-
-                <div className="shrink-0">
-                  {phase.status === 'COMPLETED' ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  ) : (
-                    <Clock className="w-5 h-5 text-slate-600" />
-                  )}
-                </div>
-              </div>
-            ))}
+      {/* Pipelines Overview */}
+      <Card className="border-slate-800 bg-slate-900/80 shadow-md overflow-hidden">
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-lg text-white flex items-center gap-2">
+              <Workflow className="w-5 h-5 text-primary" />
+              Pipelines ในระบบ
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              วันเวลาที่ทำงานล่าสุดและผลการรันของแต่ละ Pipeline
+            </CardDescription>
           </div>
-        </CardContent>
+          <div className="flex items-center gap-6 text-right shrink-0">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-400">ทั้งหมด</p>
+              <p className="text-2xl font-bold text-white">{summary?.totalPipelines ?? '-'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-400">เปิดใช้งาน</p>
+              <p className="text-2xl font-bold text-emerald-400">{summary?.activePipelines ?? '-'}</p>
+            </div>
+          </div>
+        </CardHeader>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr className="border-y border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
+                <th className="py-3 px-4 font-semibold">Pipeline</th>
+                <th className="py-3 px-4 font-semibold">สถานะ</th>
+                <th className="py-3 px-4 font-semibold">ทำงานล่าสุด</th>
+                <th className="py-3 px-4 font-semibold">ผลการรัน</th>
+                <th className="py-3 px-4 font-semibold">ระยะเวลา</th>
+                <th className="py-3 px-4 font-semibold">รอบถัดไป</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {summaryQuery.isLoading ? (
+                <TableLoading colSpan={6} text="กำลังโหลดข้อมูล Pipelines..." />
+              ) : summaryQuery.isError ? (
+                <TableEmpty colSpan={6} text="ไม่สามารถโหลดข้อมูลได้" />
+              ) : !summary || summary.pipelines.length === 0 ? (
+                <TableEmpty colSpan={6} text="ยังไม่มี Pipeline ในระบบ" />
+              ) : (
+                summary.pipelines.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 px-4">
+                      <p className="text-white font-semibold">{p.name}</p>
+                      <p className="text-xs text-slate-500 font-mono">{p.cronExpression || 'Manual'}</p>
+                    </td>
+                    <td className="py-3 px-4">
+                      {p.active ? (
+                        <Badge variant="success">Active</Badge>
+                      ) : (
+                        <Badge variant="secondary">Paused</Badge>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-slate-300">
+                      {p.lastRunAt ? formatDateTime(p.lastRunAt) : <span className="text-slate-500">ยังไม่เคยรัน</span>}
+                    </td>
+                    <td className="py-3 px-4">
+                      {p.lastStatus ? <ExecutionStatusBadge status={p.lastStatus} /> : <span className="text-slate-600">-</span>}
+                    </td>
+                    <td className="py-3 px-4 text-slate-400 font-mono text-xs">{formatDuration(p.lastDurationMs)}</td>
+                    <td className="py-3 px-4 text-slate-400">{formatDateTime(p.nextFireTime)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </Card>
+
+      {/* Execution History */}
+      <Card className="border-slate-800 bg-slate-900/80 shadow-md overflow-hidden">
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-lg text-white flex items-center gap-2">
+              <History className="w-5 h-5 text-primary" />
+              Execution History ล่าสุด
+            </CardTitle>
+            <CardDescription className="text-slate-400">การรัน Pipeline ล่าสุด {AUDIT_LIMIT} รายการ</CardDescription>
+          </div>
+          <Link to="/console" className="text-xs text-primary hover:underline shrink-0">
+            ดูทั้งหมด
+          </Link>
+        </CardHeader>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr className="border-y border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
+                <th className="py-3 px-4 font-semibold">Pipeline</th>
+                <th className="py-3 px-4 font-semibold">สถานะ</th>
+                <th className="py-3 px-4 font-semibold">Triggered By</th>
+                <th className="py-3 px-4 font-semibold">เวลาเริ่ม</th>
+                <th className="py-3 px-4 font-semibold">ระยะเวลา</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {summaryQuery.isLoading ? (
+                <TableLoading colSpan={5} text="กำลังโหลดประวัติการรัน..." />
+              ) : summaryQuery.isError ? (
+                <TableEmpty colSpan={5} text="ไม่สามารถโหลดข้อมูลได้" />
+              ) : !summary || summary.recentExecutions.length === 0 ? (
+                <TableEmpty colSpan={5} text="ยังไม่มีประวัติการรัน Pipeline" />
+              ) : (
+                summary.recentExecutions.map((exec) => (
+                  <tr key={exec.id} className="hover:bg-slate-800/40 transition-colors">
+                    <td className="py-3 px-4 text-white font-semibold">{exec.pipelineName}</td>
+                    <td className="py-3 px-4">
+                      <ExecutionStatusBadge status={exec.status} />
+                    </td>
+                    <td className="py-3 px-4 text-slate-400">
+                      {exec.triggeredBy}
+                      <span className="ml-2 text-[10px] text-slate-600 uppercase">{exec.triggerType}</span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-300">{formatDateTime(exec.startTime)}</td>
+                    <td className="py-3 px-4 text-slate-400 font-mono text-xs">{formatDuration(exec.durationMs)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Audit Logs (ADMIN only) */}
+      {isAdmin && (
+        <Card className="border-slate-800 bg-slate-900/80 shadow-md overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" />
+                Audit ล่าสุด
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                บันทึกกิจกรรมระบบล่าสุด {AUDIT_LIMIT} รายการ
+              </CardDescription>
+            </div>
+            <Link to="/audit-logs" className="text-xs text-primary hover:underline shrink-0">
+              ดูทั้งหมด
+            </Link>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="border-y border-slate-800 bg-slate-950/80 text-xs text-slate-400 uppercase tracking-wider">
+                  <th className="py-3 px-4 font-semibold">เวลา</th>
+                  <th className="py-3 px-4 font-semibold">ผู้ใช้งาน</th>
+                  <th className="py-3 px-4 font-semibold">กิจกรรม</th>
+                  <th className="py-3 px-4 font-semibold">Resource</th>
+                  <th className="py-3 px-4 font-semibold">IP Address</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {auditQuery.isLoading ? (
+                  <TableLoading colSpan={5} text="กำลังโหลดประวัติกิจกรรม..." />
+                ) : auditQuery.isError ? (
+                  <TableEmpty colSpan={5} text="ไม่สามารถโหลดข้อมูลได้" />
+                ) : !auditQuery.data || auditQuery.data.content.length === 0 ? (
+                  <TableEmpty colSpan={5} text="ยังไม่มีข้อมูลประวัติกิจกรรม" />
+                ) : (
+                  auditQuery.data.content.map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3 px-4 text-slate-400">{formatDateTime(log.createdAt)}</td>
+                      <td className="py-3 px-4 text-white font-semibold">{log.username || 'ANONYMOUS'}</td>
+                      <td className="py-3 px-4">{renderActionBadge(log.action)}</td>
+                      <td className="py-3 px-4 text-slate-300">{log.targetResource || '-'}</td>
+                      <td className="py-3 px-4 text-slate-400 font-mono text-xs">{log.ipAddress || '-'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };

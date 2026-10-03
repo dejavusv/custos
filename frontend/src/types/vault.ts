@@ -4,7 +4,8 @@ export type CredentialType =
   | 'FTP'
   | 'FTPS'
   | 'SFTP'
-  | 'GENERIC_SECRET';
+  | 'GENERIC_SECRET'
+  | 'EXTERNAL_NOTIFY';
 
 export interface CredentialResponse {
   id: string;

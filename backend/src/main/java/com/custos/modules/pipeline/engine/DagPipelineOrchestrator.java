@@ -8,6 +8,8 @@ import com.custos.modules.backup.service.BackupService;
 import com.custos.modules.drive.dto.DriveUploadResponse;
 import com.custos.modules.drive.service.DriveUploadFacadeService;
 import com.custos.modules.execution.ProcessSanitizer;
+import com.custos.modules.externalnotify.dto.ExternalNotifySendResult;
+import com.custos.modules.externalnotify.service.ExternalNotifyService;
 import com.custos.modules.pipeline.entity.*;
 import com.custos.modules.pipeline.repository.PipelineDefinitionRepository;
 import com.custos.modules.pipeline.repository.PipelineExecutionRepository;
@@ -49,6 +51,7 @@ public class DagPipelineOrchestrator {
     private final com.custos.modules.notification.service.NotificationService notificationService;
     private final DriveUploadFacadeService driveUploadFacadeService;
     private final ProcessSanitizer processSanitizer;
+    private final ExternalNotifyService externalNotifyService;
 
     /**
      * Synchronously or asynchronously runs a full pipeline execution.
@@ -400,6 +403,40 @@ public class DagPipelineOrchestrator {
                 progressBroadcaster.broadcastLog(executionId, node.getNodeLabel(), "SUCCESS",
                         "Uploaded to Google Drive: " + result.getWebViewLink());
             }
+
+            case LINE_NOTIFY -> {
+                UUID credentialId = parseRequiredUuid(config.get("credentialId"), "credentialId");
+                String taskId = config.get("taskId") != null ? config.get("taskId").toString().trim() : "";
+                if (taskId.isEmpty()) {
+                    throw new IllegalArgumentException("LINE Notify step requires a taskId");
+                }
+                String message = context.resolvePlaceholders(
+                        config.get("message") != null ? config.get("message").toString() : "");
+
+                progressBroadcaster.broadcastLog(executionId, node.getNodeLabel(), "INFO", "Sending LINE notification...");
+
+                ExternalNotifySendResult result = externalNotifyService.send(credentialId, taskId, message);
+                int failed = result.getFailedRecipients().size();
+
+                stepLog.setLogsText("LINE notification sent to " + result.getSentCount() + " recipient(s)"
+                        + (failed > 0 ? ", failed: " + failed : ""));
+                context.setVariable(node.getNodeKey() + ".notify_sent_count", String.valueOf(result.getSentCount()));
+
+                progressBroadcaster.broadcastLog(executionId, node.getNodeLabel(), failed > 0 ? "WARN" : "SUCCESS",
+                        "LINE notification sent to " + result.getSentCount() + " recipient(s)"
+                                + (failed > 0 ? " (" + failed + " failed)" : ""));
+            }
+        }
+    }
+
+    private UUID parseRequiredUuid(Object value, String fieldName) {
+        if (value == null || value.toString().isBlank()) {
+            throw new IllegalArgumentException("Step requires " + fieldName);
+        }
+        try {
+            return UUID.fromString(value.toString().trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid " + fieldName + " (must be a UUID)");
         }
     }
 

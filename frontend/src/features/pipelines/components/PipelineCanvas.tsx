@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   HardDriveUpload,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
@@ -34,6 +35,7 @@ import { FileBackupNode } from './nodes/FileBackupNode';
 import { TransferNode } from './nodes/TransferNode';
 import { NotificationNode } from './nodes/NotificationNode';
 import { GoogleDriveNode } from './nodes/GoogleDriveNode';
+import { LineNotifyNode } from './nodes/LineNotifyNode';
 import { NodeConfigModal } from './NodeConfigModal';
 import {
   MisfirePolicy,
@@ -56,6 +58,7 @@ const nodeTypes = {
   SPLIT_TRANSFER: TransferNode,
   EMAIL_ALERT: NotificationNode,
   GOOGLE_DRIVE_UPLOAD: GoogleDriveNode,
+  LINE_NOTIFY: LineNotifyNode,
 };
 
 export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
@@ -261,6 +264,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       SPLIT_TRANSFER: 'Split & SFTP Upload',
       EMAIL_ALERT: 'SES Notification',
       GOOGLE_DRIVE_UPLOAD: 'Google Drive Upload',
+      LINE_NOTIFY: 'LINE Notify',
     };
 
     const defaultDataMap: Record<TaskType, Record<string, any>> = {
@@ -289,6 +293,13 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
         sourceFilePath: '${last_output_path}',
         folderId: '',
         systemSource: 'CUSTOS_PIPELINE',
+      },
+      LINE_NOTIFY: {
+        credentialId: '',
+        credentialName: '',
+        taskId: '',
+        taskTitle: '',
+        message: '',
       },
     };
 
@@ -536,7 +547,7 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
       {/* React Flow Visual Canvas */}
       <div className="h-[600px] w-full rounded-2xl border border-slate-800 bg-slate-950 relative overflow-hidden shadow-2xl">
         {/* Step Palette Toolbar */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-slate-900/90 backdrop-blur-md p-2 rounded-xl border border-slate-800 shadow-xl">
+        <div className="absolute top-4 left-4 max-w-[calc(100%-2rem)] z-10 flex flex-wrap items-center gap-2 bg-slate-900/90 backdrop-blur-md p-2 rounded-xl border border-slate-800 shadow-xl">
           <span className="text-xs font-semibold text-slate-400 px-2 flex items-center gap-1.5">
             <Plus className="w-3.5 h-3.5 text-primary" /> Add Step:
           </span>
@@ -574,6 +585,13 @@ export const PipelineCanvas: React.FC<PipelineCanvasProps> = ({
           >
             <HardDriveUpload className="w-3.5 h-3.5" />
             Google Drive
+          </button>
+          <button
+            onClick={() => addStepNode('LINE_NOTIFY')}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 transition-all font-medium"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            LINE Notify
           </button>
         </div>
 

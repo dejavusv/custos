@@ -72,6 +72,15 @@ public class CredentialService {
             throw new BadRequestException("Credential profile name '" + request.getName() + "' already exists");
         }
 
+        if (request.getCredentialType() == CredentialType.EXTERNAL_NOTIFY) {
+            if (request.getHost() == null || request.getHost().isBlank()) {
+                throw new BadRequestException("EXTERNAL_NOTIFY credential requires a Domain (host)");
+            }
+            if (request.getSecretPassword() == null || request.getSecretPassword().isBlank()) {
+                throw new BadRequestException("EXTERNAL_NOTIFY credential requires an Auth Token");
+            }
+        }
+
         // Build decrypted payload structure
         DecryptedSecretPayload payload = DecryptedSecretPayload.builder()
                 .password(request.getSecretPassword())

@@ -66,6 +66,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/transfer/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR")
                         .requestMatchers("/api/v1/drive/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR", "ROLE_VIEWER")
                         .requestMatchers("/api/v1/pipelines/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR", "ROLE_VIEWER")
+                        .requestMatchers("/api/v1/external-notify/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR")
+                        .requestMatchers("/api/v1/dashboard/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN", "ROLE_OPERATOR", "ROLE_VIEWER")
                         .anyRequest().authenticated()
                 )
                 // ตอบ 401 เมื่อไม่มี/หมดอายุ Access Token (ค่า default ของ Spring คือ 403)

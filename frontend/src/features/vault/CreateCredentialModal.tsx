@@ -25,6 +25,7 @@ const createCredentialSchema = z.object({
     'FTP',
     'FTPS',
     'GENERIC_SECRET',
+    'EXTERNAL_NOTIFY',
   ]),
   host: z.string().optional(),
   port: z.coerce.number().optional(),
@@ -36,6 +37,15 @@ const createCredentialSchema = z.object({
   sslMode: z.string().optional(),
   ftpEncryption: z.enum(['EXPLICIT_TLS', 'NONE']).optional(),
   trustSelfSigned: z.boolean().optional(),
+}).superRefine((val, ctx) => {
+  if (val.credentialType === 'EXTERNAL_NOTIFY') {
+    if (!val.host?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['host'], message: 'กรุณาระบุ Domain' });
+    }
+    if (!val.secretPassword?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['secretPassword'], message: 'กรุณาระบุ Auth Token' });
+    }
+  }
 });
 
 type CreateCredentialFormValues = z.infer<typeof createCredentialSchema>;
@@ -52,6 +62,7 @@ const CREDENTIAL_TYPES: { id: CredentialType; label: string; defaultPort?: numbe
   { id: 'SFTP', label: 'SFTP (SSH File Transfer)', defaultPort: 22 },
   { id: 'FTP', label: 'FTP / FTPS', defaultPort: 21 },
   { id: 'GENERIC_SECRET', label: 'Generic API Secret / Token' },
+  { id: 'EXTERNAL_NOTIFY', label: 'External Notify (LINE)' },
 ];
 
 export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
@@ -94,9 +105,8 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
   const handleTypeChange = (type: CredentialType) => {
     setValue('credentialType', type);
     const found = CREDENTIAL_TYPES.find((t) => t.id === type);
-    if (found?.defaultPort) {
-      setValue('port', found.defaultPort);
-    }
+    // ชนิดที่ไม่มี default port (เช่น EXTERNAL_NOTIFY) ต้องล้างค่าเดิมที่ค้างจากชนิดก่อนหน้า
+    setValue('port', found?.defaultPort);
   };
 
   const onSubmit = async (values: CreateCredentialFormValues) => {
@@ -110,7 +120,7 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
           ftpEncryption: values.ftpEncryption || 'EXPLICIT_TLS',
           trustSelfSigned: values.trustSelfSigned ?? true,
         });
-      } else if (values.sslMode) {
+      } else if (values.credentialType !== 'EXTERNAL_NOTIFY' && values.sslMode) {
         extraMetadataStr = JSON.stringify({ sslMode: values.sslMode });
       }
 
@@ -143,6 +153,7 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
   const isDatabase =
     selectedType === 'DATABASE_POSTGRESQL' || selectedType === 'DATABASE_MYSQL';
   const isSftp = selectedType === 'SFTP';
+  const isExternalNotify = selectedType === 'EXTERNAL_NOTIFY';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -217,13 +228,19 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="md:col-span-2 space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
-                  Host / IP Address
+                  {isExternalNotify ? 'Domain ของระบบที่เรียกใช้งาน' : 'Host / IP Address'}
+                  {isExternalNotify && <span className="text-destructive"> *</span>}
                 </label>
                 <Input
-                  placeholder="เช่น 192.168.1.100 หรือ db.example.com"
+                  placeholder={
+                    isExternalNotify
+                      ? 'เช่น ccenter.example.com หรือ http://localhost:8080'
+                      : 'เช่น 192.168.1.100 หรือ db.example.com'
+                  }
                   {...register('host')}
                   disabled={isLoading}
                 />
+                {errors.host && <p className="text-xs text-destructive">{errors.host.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Port</label>
@@ -239,7 +256,7 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
 
           {/* Username & Database Name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {selectedType !== 'GENERIC_SECRET' && (
+            {selectedType !== 'GENERIC_SECRET' && !isExternalNotify && (
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Username</label>
                 <Input
@@ -269,7 +286,10 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
             <label className="text-xs font-semibold text-foreground">
               {selectedType === 'GENERIC_SECRET'
                 ? 'Secret Token / Key'
-                : 'Password (เข้ารหัส AES-256-GCM)'}
+                : isExternalNotify
+                  ? 'EXTERNAL_NOTIFY_AUTH_TOKEN (เข้ารหัส AES-256-GCM)'
+                  : 'Password (เข้ารหัส AES-256-GCM)'}
+              {isExternalNotify && <span className="text-destructive"> *</span>}
             </label>
             <div className="relative">
               <Input
@@ -287,6 +307,9 @@ export const CreateCredentialModal: React.FC<CreateCredentialModalProps> = ({
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {errors.secretPassword && (
+              <p className="text-xs text-destructive">{errors.secretPassword.message}</p>
+            )}
           </div>
 
           {/* SFTP Key Configuration */}

@@ -13,4 +13,5 @@ public interface PipelineDefinitionRepository extends JpaRepository<PipelineDefi
     Optional<PipelineDefinition> findByName(String name);
     List<PipelineDefinition> findByIsActiveTrue();
     boolean existsByName(String name);
+    long countByIsActiveTrue();
 }

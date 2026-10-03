@@ -6,5 +6,6 @@ public enum CredentialType {
     FTP,
     FTPS,
     SFTP,
-    GENERIC_SECRET
+    GENERIC_SECRET,
+    EXTERNAL_NOTIFY
 }

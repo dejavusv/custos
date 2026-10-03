@@ -100,7 +100,7 @@ public class PipelineExecutionContext {
         while (matcher.find()) {
             String key = matcher.group(1).trim();
             Object value = variables.get(key);
-            String replacement = value != null ? Matcher.quoteReplacement(value.toString()) : matcher.group(0);
+            String replacement = value != null ? Matcher.quoteReplacement(value.toString()) : Matcher.quoteReplacement(matcher.group(0));
             matcher.appendReplacement(sb, replacement);
         }
         matcher.appendTail(sb);

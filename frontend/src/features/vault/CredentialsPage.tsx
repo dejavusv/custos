@@ -13,6 +13,7 @@ import {
   FileCode,
   ShieldCheck,
   AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import { vaultApi, PageResponse } from '../../services/vaultApi';
 import { CredentialResponse, CredentialType } from '../../types/vault';
@@ -113,6 +114,12 @@ export const CredentialsPage: React.FC = () => {
           </Badge>
         );
       }
+      case 'EXTERNAL_NOTIFY':
+        return (
+          <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20 gap-1">
+            <MessageSquare className="w-3 h-3" /> External Notify
+          </Badge>
+        );
       default:
         return (
           <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/20 gap-1">
@@ -188,6 +195,7 @@ export const CredentialsPage: React.FC = () => {
                 { id: 'SFTP', label: 'SFTP' },
                 { id: 'FTP', label: 'FTP' },
                 { id: 'GENERIC_SECRET', label: 'API Secrets' },
+                { id: 'EXTERNAL_NOTIFY', label: 'External Notify' },
               ].map((filter) => (
                 <button
                   key={filter.id}

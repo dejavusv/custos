@@ -13,12 +13,14 @@ import {
   ChevronUp,
   Sparkles,
   HardDriveUpload,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { Input } from '../../../components/ui/Input';
 import { TaskType } from '../../../types/pipeline';
 import { vaultApi } from '../../../services/vaultApi';
 import { StorageBrowserDialog } from '../../../components/storage/StorageBrowserDialog';
+import { ExternalNotifyPanel } from '../../notify/components/ExternalNotifyPanel';
 
 interface NodeConfigModalProps {
   isOpen: boolean;
@@ -42,6 +44,7 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
   const [label, setLabel] = useState(nodeLabel);
   const [formFields, setFormFields] = useState<Record<string, any>>({});
   const [showDirectConnection, setShowDirectConnection] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Storage Browser Dialog State
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -99,7 +102,14 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
         if (!mapped.systemSource) mapped.systemSource = 'CUSTOS_PIPELINE';
       }
 
+      if (nodeType === 'LINE_NOTIFY') {
+        for (const key of ['credentialId', 'credentialName', 'taskId', 'taskTitle', 'message']) {
+          if (mapped[key] === undefined) mapped[key] = '';
+        }
+      }
+
       setFormFields(mapped);
+      setSaveError(null);
 
       if (mapped.host && !mapped.credentialId) {
         setShowDirectConnection(true);
@@ -173,6 +183,12 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (nodeType === 'LINE_NOTIFY') {
+      if (!formFields.credentialId || !formFields.taskId || !String(formFields.message || '').trim()) {
+        setSaveError('กรุณาเลือก Credential, Task และระบุข้อความให้ครบถ้วน');
+        return;
+      }
+    }
     const payload = { ...formFields };
     if (payload.chunkSizeMb) {
       payload.chunkSizeBytes = Number(payload.chunkSizeMb) * 1024 * 1024;
@@ -194,6 +210,7 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
                 {nodeType === 'SPLIT_TRANSFER' && <Send className="w-5 h-5 text-purple-400" />}
                 {nodeType === 'EMAIL_ALERT' && <Mail className="w-5 h-5 text-emerald-400" />}
                 {nodeType === 'GOOGLE_DRIVE_UPLOAD' && <HardDriveUpload className="w-5 h-5 text-sky-400" />}
+                {nodeType === 'LINE_NOTIFY' && <MessageSquare className="w-5 h-5 text-green-400" />}
               </div>
               <div>
                 <h2 className="text-base font-bold text-white tracking-tight">
@@ -831,6 +848,29 @@ export const NodeConfigModal: React.FC<NodeConfigModalProps> = ({
                     ใช้กรองประวัติการอัปโหลดในหน้า Task &amp; Backup Engine Hub → Google Drive &amp; Firebase
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* NODE TYPE 6: LINE NOTIFY (External Notify) */}
+            {nodeType === 'LINE_NOTIFY' && (
+              <div className="space-y-4 pt-2 border-t border-slate-800/80">
+                <ExternalNotifyPanel
+                  values={{
+                    credentialId: formFields.credentialId || '',
+                    taskId: formFields.taskId || '',
+                    message: formFields.message || '',
+                  }}
+                  onChange={(field, value) => handleFieldChange(field, value)}
+                  showCall
+                  allowPlaceholders
+                  enabled={isOpen}
+                />
+              </div>
+            )}
+
+            {saveError && (
+              <div className="p-2.5 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-md">
+                {saveError}
               </div>
             )}
 

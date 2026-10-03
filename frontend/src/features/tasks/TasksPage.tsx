@@ -19,11 +19,13 @@ import {
   FileCheck,
   FolderOpen,
   UploadCloud,
+  MessageSquare,
 } from 'lucide-react';
 import { vaultApi } from '../../services/vaultApi';
 import { backupApi } from '../../services/backupApi';
 import { transferApi } from '../../services/transferApi';
 import { DriveUploadSection } from './components/DriveUploadSection';
+import { ExternalNotifyPanel, ExternalNotifyValues } from '../notify/components/ExternalNotifyPanel';
 import {
   BackupResult,
   CompressionFormat,
@@ -40,7 +42,8 @@ import { Input } from '../../components/ui/Input';
 import { StorageBrowserDialog } from '../../components/storage/StorageBrowserDialog';
 
 export const TasksPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'database' | 'filesystem' | 'retention' | 'transfer' | 'gdrive'>('database');
+  const [activeTab, setActiveTab] = useState<'database' | 'filesystem' | 'retention' | 'transfer' | 'gdrive' | 'line'>('database');
+  const [lineNotify, setLineNotify] = useState<ExternalNotifyValues>({ credentialId: '', taskId: '', message: '' });
   const [copiedChecksum, setCopiedChecksum] = useState<string | null>(null);
 
   // Database Backup Form State
@@ -344,6 +347,17 @@ export const TasksPage: React.FC = () => {
         >
           <UploadCloud className="w-4 h-4 text-blue-400" />
           Google Drive & Firebase
+        </button>
+        <button
+          onClick={() => setActiveTab('line')}
+          className={`flex items-center gap-2 pb-3 px-4 text-sm font-medium border-b-2 whitespace-nowrap transition-all ${
+            activeTab === 'line'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <MessageSquare className="w-4 h-4 text-green-400" />
+          แจ้งเตือนทีม (LINE)
         </button>
       </div>
 
@@ -1160,6 +1174,32 @@ export const TasksPage: React.FC = () => {
       {/* Tab 5: Google Drive Upload & Firebase Firestore Audit */}
       {activeTab === 'gdrive' && (
         <DriveUploadSection />
+      )}
+
+      {/* Tab 6: LINE Notification via External Notify API */}
+      {activeTab === 'line' && (
+        <Card className="border-border bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-green-400" />
+              Task Line Notification (External Notify)
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              เลือก Domain + Token จาก Vault แล้วกด Connect เพื่อดึงรายการ Task ที่เปิดรับการแจ้งเตือนจากภายนอก จากนั้นเลือก Task พิมพ์ข้อความและกด Call เพื่อส่งไปยังลูกค้าทาง LINE
+            </p>
+          </CardHeader>
+          <CardContent>
+            <ExternalNotifyPanel
+              values={lineNotify}
+              onChange={(field, value) => {
+                if (field === 'credentialId' || field === 'taskId' || field === 'message') {
+                  setLineNotify((prev) => ({ ...prev, [field]: value }));
+                }
+              }}
+              showCall
+            />
+          </CardContent>
+        </Card>
       )}
 
       {/* Storage Browser Dialog */}
